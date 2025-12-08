@@ -40,8 +40,12 @@ def prepare_request(test: TestObject, request_with_reponse: str, newpath: str) -
     request_body = '\r\n'.join(request_body_lines)
     request_header = request_header + '\r\n' + 'Authorization: Bearer abc'
     if test.type_name == 'GraphStoreProtocolTest':
+        # Replace only the first occurrence with leading slash (in the request header),
+        # then replace remaining occurrences in header and body without the slash.
         request_header = request_header.replace(
-            '$GRAPHSTORE$', '/' + test.config.GRAPHSTORE)
+            '$GRAPHSTORE$', '/' + test.config.GRAPHSTORE, 1)
+        request_header = request_header.replace(
+            '$GRAPHSTORE$', test.config.GRAPHSTORE)
         request_body = request_body.replace(
             '$GRAPHSTORE$', test.config.GRAPHSTORE)
     request_header = request_header.replace('XXX', str(len(request_body)))
