@@ -54,6 +54,7 @@ def prepare_request(test: TestObject, request_with_reponse: str, newpath: str) -
 
 def prepare_response(test: TestObject, request_with_reponse: str, newpath: str) -> dict[str, str | list[str]]:
     response: dict[str, str | list[str]] = {'status_codes': [], 'content_types': []}
+    request_string = request_with_reponse.split('#### Response')[0]
     response_string = request_with_reponse.split('#### Response')[1]
     if test.type_name == 'GraphStoreProtocolTest':
         response_string = response_string.replace(
@@ -63,6 +64,7 @@ def prepare_response(test: TestObject, request_with_reponse: str, newpath: str) 
         response_string = response_string.replace(
             '$NEWPATH$', newpath)
     response_lines = [x.strip() for x in response_string.splitlines() if x]
+    is_put_request = 'PUT ' in request_string
     for line in response_lines:
         if line.endswith('response') or re.search(r'\dxx', line) is not None:
             line = line.replace('response', '')
@@ -70,8 +72,12 @@ def prepare_response(test: TestObject, request_with_reponse: str, newpath: str) 
             for status_code in status_codes:
                 response['status_codes'].append(status_code.strip())
         if re.search(r'^\d\d\d ', line) is not None:
-            response['status_codes'].append(
-                re.search(r'^\d\d\d ', line).group(0))
+            status_code = re.search(r'^\d\d\d ', line).group(0)
+            response['status_codes'].append(status_code)
+            # PUT modifying existing content can return 200 or 204
+            # https://www.w3.org/TR/sparql11-http-rdf-update/#http-put
+            if is_put_request and status_code.strip() == '204':
+                response['status_codes'].append('200')
         if line.startswith('Content-Type:'):
             line = line.replace('Content-Type:', '')
             content_types = line.strip().split('or')
