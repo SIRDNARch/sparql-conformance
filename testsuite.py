@@ -7,7 +7,9 @@ import csv
 import sys
 import json
 import bz2
-from backend.models import TestObject, Config, SERVER_ERROR, FAILED, PASSED, INTENDED, QUERY_EXCEPTION, REQUEST_ERROR, UNDEFINED_ERROR, INDEX_BUILD_ERROR, SERVER_ERROR, NOT_TESTED, RESULTS_NOT_THE_SAME, INTENDED_MSG, EXPECTED_EXCEPTION, NOT_SUPPORTED
+from backend.models import TestObject, Config, SERVER_ERROR, FAILED, PASSED, INTENDED, QUERY_EXCEPTION, REQUEST_ERROR, \
+    UNDEFINED_ERROR, INDEX_BUILD_ERROR, SERVER_ERROR, NOT_TESTED, RESULTS_NOT_THE_SAME, INTENDED_MSG, \
+    EXPECTED_EXCEPTION, NOT_SUPPORTED, NEGATIVE_QUERY_RESPONSE
 import backend.models as vars
 from backend.extract_tests import extract_tests
 from backend.xml_tools import compare_xml
@@ -339,7 +341,7 @@ class TestSuite:
                     setattr(test, "query_log", query_result[1])
                     self.update_test_status(test, PASSED, "")
                 if test.type_name == "NegativeSyntaxTest11" or test.type_name == "NegativeUpdateSyntaxTest11":
-                    if test.error_type == "QUERY EXCEPTION":
+                    if test.error_type in NEGATIVE_QUERY_RESPONSE:
                         status = PASSED
                         error_type = ""
                     else:

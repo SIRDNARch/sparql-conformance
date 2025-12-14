@@ -18,6 +18,7 @@ INTENDED_MSG = 'Intended deviation from SPARQL standard'
 EXPECTED_EXCEPTION = 'Expected error response from query'
 FORMAT_ERROR = 'Result format error'
 NOT_SUPPORTED = 'Content type not supported'
+NEGATIVE_QUERY_RESPONSE = [QUERY_EXCEPTION, REQUEST_ERROR, NOT_SUPPORTED, UNDEFINED_ERROR]
 
 
 class Config:
