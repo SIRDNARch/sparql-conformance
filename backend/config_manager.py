@@ -11,12 +11,14 @@ def create_config(
         path_to_binaries: str,
         host: str,
         graphstore: str,
-        newpath: str) -> bool:
+        newpath: str,
+        server_binary: str,
+        index_binary: str) -> bool:
     """
     Create the config file.
     """
-    path_to_server_main = os.path.join(path_to_binaries, "ServerMain")
-    path_to_index_builder = os.path.join(path_to_binaries, "IndexBuilderMain")
+    path_to_server_main = os.path.join(path_to_binaries, server_binary)
+    path_to_index_builder = os.path.join(path_to_binaries, index_binary)
     if not path_exists(path_to_testsuite) or not path_exists(path_to_binaries) or not path_exists(
             path_to_server_main) or not path_exists(path_to_index_builder):
         return False

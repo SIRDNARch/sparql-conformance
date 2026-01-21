@@ -506,17 +506,17 @@ class TestSuite:
 def main():
     args = sys.argv[1:]
     if len(args) < 1:
-        print(f"  Usage to create config: python3 {sys.argv[0]} config <server address> <port> <path to testsuite> <path to the qlever binaries>  <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header>\n  Usage to extract tests: python3 {sys.argv[0]} extract \n  Usage to run tests: python3 {sys.argv[0]} <name for the test suite run>")
+        print(f"  Usage to create config: python3 {sys.argv[0]} config <server address> <port> <path to testsuite> <path to the qlever binaries> <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header> <server binary name> <index binary name>\n  Usage to extract tests: python3 {sys.argv[0]} extract \n  Usage to run tests: python3 {sys.argv[0]} <name for the test suite run>")
         return
 
     if args[0] == "config":
-        if len(args) == 8:
+        if len(args) == 10:
             print(f"Create basic config.")
             config_manager.create_config(
-                args[1], args[2], args[3], args[4], args[5], args[6], args[7])
+                args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9])
         else:
             print(
-                f"Usage to create config: python3 {sys.argv[0]} config <server address> <port> <path to testsuite> <path to the qlever binaries> <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header>")
+                f"Usage to create config: python3 {sys.argv[0]} config <server address> <port> <path to testsuite> <path to the qlever binaries> <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header> <server binary name> <index binary name>")
             return
 
     config = config_manager.initialize_config()
@@ -531,7 +531,7 @@ def main():
         test_suite.run()
         test_suite.generate_json_file()
     elif args[0] != "config" and args[0] != "extract":
-        print(f"  Usage to create config: python3 {sys.argv[0]} config <server address> <port> <path to testsuite> <path to binaries> <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header> \n  Usage to extract tests: python3 {sys.argv[0]} extract \n  Usage to run tests: python3 {sys.argv[0]} <name for the test suite run>")
+        print(f"  Usage to create config: python3 {sys.argv[0]} config <server address> <port> <path to testsuite> <path to binaries> <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header> <server binary name> <index binary name> \n  Usage to extract tests: python3 {sys.argv[0]} extract \n  Usage to run tests: python3 {sys.argv[0]} <name for the test suite run>")
         return
     print("Done!")
     return

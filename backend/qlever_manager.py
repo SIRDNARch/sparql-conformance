@@ -8,7 +8,7 @@ from backend.rdf_tools import write_ttl_file, delete_ttl_file, rdf_xml_to_turtle
 
 def index(command_index: str, graph_paths: Tuple[Tuple[str, str], ...]) -> tuple:
     """
-    Executes a command to index a graph file using the QLever IndexBuilderMain binary.
+    Executes a command to index a graph file using the QLever qlever-index binary.
 
     Parameters:
         command_index: Command to be executed
