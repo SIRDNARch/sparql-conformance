@@ -1,49 +1,90 @@
-# qlever-test-suite
+# sparql-conformance
 
-Running the [SPARQL test suite](https://www.w3.org/2009/sparql/docs/tests/) for [QLEVER](https://github.com/ad-freiburg/qlever).
+A standalone tool for running the [W3C SPARQL conformance test suite](https://github.com/w3c/rdf-tests/tree/main/sparql/) against any SPARQL engine. The engine under test is provided as a small Python file — no framework dependency required.
+
+Originally developed for [QLever](https://github.com/ad-freiburg/qlever); now engine-agnostic.
 
 ## Prerequisites
 
-You need too compile the [QLever code](https://github.com/ad-freiburg/qlever) and get the [SPARQL test suite files](https://github.com/w3c/rdf-tests/tree/main/sparql/).
+- Python 3.10+
+- Dependencies: `rdflib`, `requests` (install via `pip install rdflib requests`)
+- The W3C test suite files — clone or download:
+  ```
+  git clone https://github.com/w3c/rdf-tests.git
+  ```
+- A compiled SPARQL engine to test
 
 ## Running the test suite
 
-### Create the config
-
-Before you can run the test suite you have to setup the config. To do this run the following command.
-
 ```
-python3 testsuite.py config <server address> <port> <path to testsuite> <path to the qlever binaries>  <graph store implementation host> <path of the URL of the graph store> <URL returned in the Location HTTP header>
-```
-Example:
-```
-python3 testsuite.py config http://0.0.0.0 7000 ./testsuite/ ../qlever-code/build/ localhost sparql sparql
+python3 main.py \
+  --engine <engine-file> \
+  --name <run-name> \
+  --sparql11-dir <path/to/sparql11>
 ```
 
-### Extract the tests
+### Arguments
 
-After setting up the config you can now extract all the tests from the SPARQL test suite.
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `--engine` | yes | — | Path to a Python file containing an `EngineManager` subclass (see [src/engines/README.md](src/engines/README.md)) |
+| `--name` | yes | — | Label for this run; output is written to `results/<name>.json.bz2` |
+| `--sparql11-dir` | one of the three | — | Path to the SPARQL 1.1 test suite directory |
+| `--sparql10-dir` | one of the three | — | Path to the SPARQL 1.0 test suite directory |
+| `--custom-dir` | one of the three | — | Path to a custom test suite directory |
+| `--port` | no | `7001` | Port the engine server listens on |
+| `--graph-store` | no | `sparql` | Graph store endpoint path for graph store protocol tests |
+| `--binaries-directory` | no | `` | Directory containing engine binaries (forwarded to the engine manager via `config.path_to_binaries`) |
+| `--exclude` | no | — | Comma-separated list of test names or group names to skip |
+| `--include` | no | — | Comma-separated list of test names or group names to run (all others skipped) |
+| `--type-alias` | no | — | JSON list of XSD type pairs treated as equivalent. See below. |
 
+### Example: QLever
+
+```bash
+python3 main.py \
+  --engine src/engines/qlever-binaries-manager.py \
+  --name qlever-2024 \
+  --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --sparql10-dir ../rdf-tests/sparql/sparql10 \
+  --binaries-directory ../qlever/build
 ```
-python3 testsuite.py extract
+
+### Type aliases
+
+Some engines return a numerically equivalent but differently typed literal (e.g. `xsd:int` instead of `xsd:integer`). Use `--type-alias` to mark these as intended deviations rather than failures:
+
+```bash
+--type-alias "[['xsd:integer','xsd:int'],['xsd:double','xsd:float']]"
 ```
 
-This will generate the test list with the specified name.
+### Filtering tests
 
-### Run
+Run a single group or test by name:
 
-Now you can execute the test suite.
+```bash
+# Run only the property path group
+--include pp01,pp02,pp06
 
-```
-python3 testsuite.py <name for the test suite run>
-```
-Example:
-```
-python3 testsuite.py firstRun
+# Skip aggregates
+--exclude aggregates
 ```
 
-If this is the first run it will generate a directory called results. All results will be saved in this directory. For example the firstRun.json.
+## Output
 
-### View and compare results
+Results are written to `results/<name>.json.bz2`. The file contains a JSON object with one entry per test suite and a summary:
 
-If you want to visualize the results you can use the TODO.
+```json
+{
+  "version": 2,
+  "suites": {
+    "sparql11": { "tests": [...], "info": { "passed": 512, "failed": 34, ... } },
+    "sparql10": { "tests": [...], "info": { ... } }
+  },
+  "info": { "passed": 560, "tests": 620, "failed": 38, ... }
+}
+```
+
+## Adding support for a new engine
+
+See [src/engines/README.md](src/engines/README.md) for a step-by-step guide to writing an `EngineManager` for any SPARQL engine.

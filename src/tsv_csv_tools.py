@@ -1,7 +1,62 @@
-from backend.util import escape, is_number
+from typing import List, Tuple
+
+from src.util import escape, is_number
 from io import StringIO
 import csv
-from backend.models import FAILED, PASSED, INTENDED, RESULTS_NOT_THE_SAME, INTENDED_MSG
+from src.test_object import Status, ErrorMessage
+
+def _build_column_mapping(expected_header: list, actual_header: list):
+    """
+    Return a list L which aligns actual[row][L[i]] with expected[row][i].
+    Example: actual: s p o expected: o p s -> L[0] = 2, L[1] = 1, L[2] = 0
+    If no perfect mapping exists, return None.
+    """
+    if len(expected_header) != len(actual_header):
+        return None
+
+    wanted = expected_header
+    have = actual_header
+
+    used = set()
+    mapping = []
+    for name in wanted:
+        idx = None
+        for j, col in enumerate(have):
+            if j in used:
+                continue
+            if col.strip() == name.strip():
+                idx = j
+                break
+        if idx is None:
+            return None
+        used.add(idx)
+        mapping.append(idx)
+    return mapping
+
+
+def _reorder_columns_to_expected(expected_array: list, actual_array: list):
+    """
+    If the first rows (headers) of expected/actual are a permutation of each other,
+    reorder every row of the actual array to match the expected header order.
+    Otherwise, just return actual_array.
+    """
+    if not expected_array or not actual_array:
+        return actual_array
+
+    expected_header = expected_array[0]
+    actual_header = actual_array[0]
+
+    if sorted(expected_header) != sorted(actual_header):
+        return actual_array
+
+    mapping = _build_column_mapping(expected_header, actual_header)
+    if mapping is None:
+        return actual_array
+
+    def reorder_row(row):
+        return [row[i] if i < len(row) else "" for i in mapping]
+
+    return [reorder_row(r) for r in actual_array]
 
 
 def write_csv_file(file_path: str, csv_rows: list):
@@ -47,6 +102,7 @@ def generate_highlighted_string_sv(
 
     Parameters:
         array (list): The array to be converted to a string.
+        mark_red (list): The rows to be highlighted in red.
         remaining (list): The rows to be highlighted.
         result_type (str): The type of result (csv or tsv) to determine the separator.
 
@@ -73,7 +129,7 @@ def compare_values(
         value1: str,
         value2: str,
         use_config: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         map_bnodes: dict) -> bool:
     """
     Compares two values for equality accounting for numeric differences and aliases.
@@ -109,7 +165,7 @@ def compare_values(
         if float(value1) == float(value2):
             return True
     else:  # Handle exceptions integer = int
-        if value1 in alias and alias[value1] == value2 and use_config:
+        if use_config and ((value1, value2) in alias or (value2, value1) in alias):
             return True
     return False
 
@@ -118,7 +174,7 @@ def compare_rows(
         row1: list,
         row2: list,
         use_config: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         map_bnodes: dict) -> bool:
     """
     Compares two rows for equality.
@@ -127,7 +183,7 @@ def compare_rows(
         row1 (list): The first row to compare.
         row2 (list): The second row to compare.
         use_config (bool): Flag to use configuration for additional comparison logic.
-        alias (dict): Dictionary with aliases for datatypes ex. int = integer .
+        alias (List[Tuple[str, str]]): Dictionary with aliases for datatypes ex. int = integer .
         map_bnodes (dict): Dictionary mapping the used bnodes.
 
     Returns:
@@ -153,7 +209,7 @@ def compare_array(
         result_copy: list,
         expected_result_copy: list,
         use_config: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         map_bnodes: dict):
     """
     Compares two arrays and removes equal rows from both arrays.
@@ -164,7 +220,7 @@ def compare_array(
         result_copy (list): A copy of the actual result array for modification.
         expected_result_copy (list): A copy of the expected result array for modification.
         use_config (bool): Flag to use configuration for additional comparison logic.
-        alias (dict): Dictionary with aliases for datatypes ex. int = integer .
+        alias (List[Tuple[str, str]]): Dictionary with aliases for datatypes ex. int = integer .
         map_bnodes (dict): Dictionary mapping the used bnodes.
     """
     for row1 in result:
@@ -196,6 +252,9 @@ def convert_csv_tsv_to_array(input_string: str, input_type: str):
     with StringIO(input_string) as io:
         reader = csv.reader(io, delimiter=delimiter)
         for row in reader:
+            # Drop empty rows
+            if not row or not any(cell.strip() for cell in row):
+                continue
             rows.append(row)
     return rows
 
@@ -204,25 +263,29 @@ def compare_sv(
         expected_string: str,
         query_result: str,
         result_format: str,
-        alias: dict):
+        alias: List[Tuple[str, str]]):
     """
     Compares CSV/TSV formatted query result with the expected output.
 
     Parameters:
         expected_string (str): Expected CSV/TSV formatted string.
         query_result (str): Actual CSV/TSV formatted string from the query.
-        output_format (str): Format of the output ('csv' or 'tsv').
-        alias (dict): Dictionary with aliases for datatypes ex. int = integer .
+        result_format (str): Format of the output ('csv' or 'tsv').
+        alias (List[Tuple[str, str]]): Dictionary with aliases for datatypes ex. int = integer .
 
     Returns:
         tuple(int, str, str, str, str, str): A tuple of test status and error message and expected html, query html, expected red, query red
     """
     map_bnodes = {}
-    status = FAILED
-    error_type = RESULTS_NOT_THE_SAME
+    status = Status.FAILED
+    error_type = ErrorMessage.RESULTS_NOT_THE_SAME
 
     expected_array = convert_csv_tsv_to_array(expected_string, result_format)
     actual_array = convert_csv_tsv_to_array(query_result, result_format)
+
+    # NEW: normalize actual column order to match expected header
+    actual_array = _reorder_columns_to_expected(expected_array, actual_array)
+
     actual_array_copy = actual_array.copy()
     expected_array_copy = expected_array.copy()
     actual_array_mark_red = []
@@ -238,7 +301,7 @@ def compare_sv(
         map_bnodes)
 
     if len(actual_array_copy) == 0 and len(expected_array_copy) == 0:
-        status = PASSED
+        status = Status.PASSED
         error_type = ""
     else:
         actual_array_mark_red = actual_array_copy.copy()
@@ -253,8 +316,8 @@ def compare_sv(
             map_bnodes)
         if len(actual_array_mark_red) == 0 and len(
                 expected_array_mark_red) == 0:
-            status = INTENDED
-            error_type = INTENDED_MSG
+            status = Status.INTENDED
+            error_type = ErrorMessage.INTENDED_MSG
 
     expected_html = generate_highlighted_string_sv(
         expected_array,

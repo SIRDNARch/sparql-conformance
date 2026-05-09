@@ -1,8 +1,8 @@
 import rdflib
-from backend.models import FAILED, PASSED, RESULTS_NOT_THE_SAME, FORMAT_ERROR, NOT_TESTED
+from src.test_object import Status, ErrorMessage
 import os
 import re
-from backend.util import escape
+from src.util import escape
 
 
 def rdf_xml_to_turtle(file_path, public_id) -> str:
@@ -66,48 +66,50 @@ def highlight_differences(turtle_data, diff):
     return serialized_turtle
 
 def compare_ttl(expected_ttl: str, query_ttl: str) -> tuple:
-    """
-    Compares two XML documents, identifies differences and generates HTML representations.
-
-    This method compares two XML documents and identifies differences.
-    It removes equal elements in both documents and generates HTML representations highlighting the remaining differences.
-
-    Parameters:
-        expected_xml (str): The expected XML content as a string.
-        query_xml (str): The query XML content as a string.
-
-    Returns:
-        tuple (bool,str,str,str,str,str): A tuple containing the status, error type and the strings XML1, XML2, XML1 RED, XML2 RED
-    """
-    status = FAILED
-    error_type = RESULTS_NOT_THE_SAME
+    status = Status.FAILED
+    error_type = ErrorMessage.RESULTS_NOT_THE_SAME
     expected_graph = rdflib.Graph()
     query_graph = rdflib.Graph()
     try:
         expected_graph.parse(data=expected_ttl, format="turtle")
-    except Exception as e:
+    except Exception:
         expected_ttl = '@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix v: <http://www.w3.org/2006/vcard/ns#> .\n\n' + expected_ttl
         try:
             expected_graph.parse(data=expected_ttl, format="turtle")
         except Exception as e:
-            error_type = FORMAT_ERROR
+            error_type = ErrorMessage.FORMAT_ERROR
             escaped_expected = f'<label class="red">{escape(expected_ttl)}</label>'
-            return NOT_TESTED, error_type, escaped_expected, escape(query_ttl), f'<label class="red">{e}</label>', escape(
+            return Status.NOT_TESTED, error_type, escaped_expected, escape(query_ttl), f'<label class="red">{e}</label>', escape(
                 query_ttl)
 
     try:
         query_graph.parse(data=query_ttl, format="turtle")
     except Exception as e:
-        error_type = FORMAT_ERROR
+        error_type = ErrorMessage.FORMAT_ERROR
         escaped_query = f'<label class="red">{escape(query_ttl)}</label>'
         escaped_expected = f'<label class="red">{escape(expected_ttl)}</label>'
         return status, error_type, escape(
             expected_ttl), escaped_query, escaped_expected, f'<label class="red">{e}</label>'
 
     is_isomorphic = expected_graph.isomorphic(query_graph)
-
+    test = '''_:bn442302852101219001 <http://www.w3.org/2006/vcard/ns#fn> "Jane Doe" .
+_:bn442302852101219001 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2006/vcard/ns#VCard> .
+<http://localhost/http-graph-store/person/1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://localhost/http-graph-store/person/1> <http://xmlns.com/foaf/0.1/businessCard> _:bn442302852101219001 .'''
+    test_graph = rdflib.Graph().parse(data=test, format="turtle")
+    print(test_graph.serialize(format="turtle"))
+    print(expected_graph.isomorphic(test_graph))
+    print(test_graph.isomorphic(expected_graph))
+    print('######################')
+    print(expected_ttl)
+    print('---')
+    print(expected_graph.serialize(format="turtle"))
+    print('xxxxxxxxXXXXXXxxxxxxxxxxx')
+    print(query_graph.serialize(format="turtle"))
+    print('---')
+    print(query_ttl)
     if is_isomorphic:
-        status = PASSED
+        status = Status.PASSED
         error_type = ""
         expected_string = escape(expected_ttl)
         query_string = escape(query_ttl)

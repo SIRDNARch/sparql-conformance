@@ -1,7 +1,10 @@
 import re
 import xml.etree.ElementTree as ET
-from backend.models import FAILED, PASSED, INTENDED, RESULTS_NOT_THE_SAME, INTENDED_MSG
-from backend.util import escape
+import xml.dom.minidom as md
+from typing import List, Tuple
+
+from src.test_object import Status, ErrorMessage
+from src.util import escape
 
 
 def replace_self_closing_tag(xml: str) -> str:
@@ -22,7 +25,7 @@ def replace_self_closing_tag(xml: str) -> str:
     return re.sub(pattern, replacement, xml)
 
 
-def highlight_first_occurrence(original: str, string_part: str, label) -> str:
+def highlight_first_occurrence(original: str, string_part: str, label: str) -> str:
     """
     Highlights the first occurrence of string_part in original by wrapping it with a <label class="red"> tag.
 
@@ -31,6 +34,7 @@ def highlight_first_occurrence(original: str, string_part: str, label) -> str:
     Parameters:
         original (str): Any string
         string_part (str): A string which might be a part of original
+        label (str): css class of the label
 
     Returns:
         str: The original string with the string_part highlighted if found
@@ -50,11 +54,6 @@ def highlight_first_occurrence(original: str, string_part: str, label) -> str:
 def element_to_string(element: ET.Element, escaped_xml: str, label: str):
     """
     This function takes an element turns in into a string and if the string is part of the escaped_xml string it will be enclosed with a HTML label
-
-    Parameters:
-        original_xml (str): The original XML string to be processed.
-        remaining_tree (ET.ElementTree): An ElementTree object representing the XML elements to be highlighted.
-        red_tree: ET.ElementTree (ET.ElementTree): An ElementTree object representing the XML elements to RED otherwise yellow.
 
     Returns:
         str: An HTML-escaped XML string with specific elements highlighted.
@@ -90,11 +89,6 @@ def generate_highlighted_string_xml(
     ElementTree within the escaped XML string. Elements to be highlighted are wrapped in a
     <label> tag.
 
-    Parameters:
-        original_xml (str): The original XML string to be processed.
-        remaining_tree (ET.ElementTree): An ElementTree object representing the XML elements to be highlighted.
-        red_tree: ET.ElementTree (ET.ElementTree): An ElemenTree object representing the XML elements to RED otherwise yellow.
-
     Returns:
         str: An HTML-escaped XML string with specific elements highlighted.
     """
@@ -110,7 +104,7 @@ def generate_highlighted_string_xml(
     for element in remaining_tree.getroot().findall('.//result'):
         label = "yellow"
         for elem in red_tree.getroot().findall('.//result'):
-            if xml_elements_equal(element, elem, False, {}, number_types, {}):
+            if xml_elements_equal(element, elem, False, [], number_types, {}):
                 label = "red"
         escaped_xml = element_to_string(element, escaped_xml, label)
 
@@ -143,12 +137,6 @@ def generate_html_for_xml(
     """
     Generates HTML representations for two XML strings with specific elements highlighted.
 
-    Parameters:
-        xml1 (str): The first XML string to be processed.
-        xml2 (str): The second XML string to be processed.
-        remaining_tree1 (ET.ElementTree): representing the XML elements to be highlighted for the first XML string.
-        remaining_tree2 (ET.ElementTree): representing the XML elements to be highlighted for the second XML string.
-
     Returns:
         tuple (str, str, str, str): A tuple containing four HTML-escaped and highlighted XML strings. (XML1, XML2, XML1 RED, XML2 RED)
     """
@@ -176,17 +164,17 @@ def xml_elements_equal(
         element1: ET.Element,
         element2: ET.Element,
         compare_with_intended_behaviour: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         number_types: list,
         map_bnodes: dict) -> bool:
     """
     Compares two XML elements for equality in tags, attributes and text.
 
     Parameters:
-        e1 (ET.Element): The first XML element
+        element1 (ET.Element): The first XML element
         element2 (ET.Element): The second XML element
         compare_with_intended_behaviour (bool): Bool to determine whether to use intended behaviour aliases in comparison.
-        alias (dict): Dictionary with aliases for datatypes ex. int = integer .
+        alias (List[Tuple[str, str]]): Dictionary with aliases for datatypes ex. int = integer .
         number_types (list): List containing all datatypes that should be used as numbers.
         map_bnodes (dict): Dictionary mapping the used bnodes.
 
@@ -198,8 +186,7 @@ def xml_elements_equal(
 
     is_number = False
     if element1.tag != element2.tag:
-        if (alias.get(element1.tag) != element2.tag and alias.get(
-                element2.tag) != element1.tag) or not compare_with_intended_behaviour:
+        if not compare_with_intended_behaviour or not (element1.tag, element2.tag) in alias and not (element2.tag, element1.tag) in alias:
             return False
 
     if element1.attrib != element2.attrib:
@@ -211,12 +198,9 @@ def xml_elements_equal(
             return False
         if ((element1.attrib.get("datatype") is not None or element2.attrib.get("datatype") != "http://www.w3.org/2001/XMLSchema#string") and
             (element2.attrib.get("datatype") is not None or element1.attrib.get("datatype") != "http://www.w3.org/2001/XMLSchema#string")):
-            if not isinstance(
-                element1.attrib, dict) and (
-                alias.get(
-                    element1.attrib) != element2.attrib and alias.get(
-                    element2.attrib) != element1.attrib) or not compare_with_intended_behaviour:
-                return False
+            if not isinstance(element1.attrib, dict):
+                if not compare_with_intended_behaviour or not (element1.attrib, element2.attrib) in alias and not (element2.attrib, element1.attrib) in alias:
+                    return False
             if isinstance(element1.attrib, dict):
                 if element1.attrib.get("datatype") is None and element2.attrib.get(
                         "datatype") is None:
@@ -228,8 +212,9 @@ def xml_elements_equal(
                     else:
                         return False
                 else:
-                    if (alias.get(element1.attrib.get("datatype")) != element2.attrib.get("datatype") and alias.get(
-                            element2.attrib.get("datatype")) != element1.attrib.get("datatype")) or not compare_with_intended_behaviour:
+                    if not compare_with_intended_behaviour or not (element1.attrib.get("datatype"),
+                                                                   element2.attrib.get("datatype")) in alias and not (element2.attrib.get("datatype"),
+                                                                                                      element1.attrib.get("datatype")) in alias:
                         return False
 
     if (element1.attrib.get("datatype") in number_types) != (
@@ -305,10 +290,8 @@ def xml_elements_equal(
                     alias,
                     number_types,
                     map_bnodes) for c2 in element2) for c1 in element1)
-        if (alias.get(element1.text) != element2.text and alias.get(
-                element2.text) != element1.text) or not compare_with_intended_behaviour:
+        if not compare_with_intended_behaviour or not (element1.text, element2.text) in alias and not (element2.text, element1.text) in alias:
             return False
-
     return all(any(xml_elements_equal(
             c1,
             c2,
@@ -322,7 +305,7 @@ def xml_remove_equal_elements(
         parent1: ET.Element,
         parent2: ET.Element,
         use_config: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         number_types: list,
         map_bnodes: dict):
     """
@@ -356,7 +339,7 @@ def xml_remove_equal_elements(
 def compare_xml(
         expected_xml: str,
         query_xml: str,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         number_types: list) -> tuple:
     """
     Compares two XML documents, identifies differences and generates HTML representations.
@@ -373,11 +356,54 @@ def compare_xml(
     Returns:
         tuple (str,str,str,str,str,str): A tuple containing the status, error type and the strings XML1, XML2, XML1 RED, XML2 RED
     """
+    status = Status.FAILED
+    error_type = ErrorMessage.RESULTS_NOT_THE_SAME
+    try:
+        query_xml = md.parseString(query_xml).toxml()
+        query_xml = md.parseString(query_xml).toprettyxml(indent="  ")
+    except Exception as e:
+        error_type = ErrorMessage.FORMAT_ERROR
+        escaped_expected = f'<label class="red">{escape(expected_xml)}</label>'
+        escaped_query = f'<label class="red">{escape(query_xml)}</label>'
+        return (
+            status,
+            error_type,
+            escape(expected_xml),
+            escaped_query,
+            escaped_expected,
+            f'<label class="red">{e}</label>',
+        )
+
+    try:
+        expected_tree = ET.ElementTree(ET.fromstring(expected_xml))
+    except Exception as e:
+        error_type = ErrorMessage.FORMAT_ERROR
+        escaped_expected = f'<label class="red">{escape(expected_xml)}</label>'
+        return (
+            Status.NOT_TESTED,
+            error_type,
+            escaped_expected,
+            escape(query_xml),
+            f'<label class="red">{e}</label>',
+            escape(query_xml),
+        )
+
+    try:
+        query_tree = ET.ElementTree(ET.fromstring(query_xml))
+    except Exception as e:
+        error_type = ErrorMessage.FORMAT_ERROR
+        escaped_expected = f'<label class="red">{escape(expected_xml)}</label>'
+        escaped_query = f'<label class="red">{escape(query_xml)}</label>'
+        return (
+            status,
+            error_type,
+            escape(expected_xml),
+            escaped_query,
+            escaped_expected,
+            f'<label class="red">{e}</label>',
+        )
+
     map_bnodes = {}
-    status = FAILED
-    error_type = RESULTS_NOT_THE_SAME
-    expected_tree = ET.ElementTree(ET.fromstring(expected_xml))
-    query_tree = ET.ElementTree(ET.fromstring(query_xml))
 
     # Compare and remove equal elements in <head>
     head1 = expected_tree.find(
@@ -434,8 +460,8 @@ def compare_xml(
             list(results2)) == 0 and len(
                 list(head1)) == 0 and len(
                     list(head2)) == 0) or (
-                        results1 is None and results2 is None and head1 is None and head2 is None and bool1 is None and bool2 is None):
-        status = PASSED
+                        results1 is None and results2 is None and head1 is None and head2 is None and expected_bool is None and query_bool is None):
+        status = Status.PASSED
         error_type = ""
     else:
         if results1 is not None and results2 is not None:
@@ -448,10 +474,10 @@ def compare_xml(
                 map_bnodes)
 
             if len(list(results1)) == 0 and len(list(results2)) == 0:
-                status = INTENDED
-                error_type = INTENDED_MSG
+                status = Status.INTENDED
+                error_type = ErrorMessage.INTENDED_MSG
         elif expected_bool is None and query_bool is None:
-            status = PASSED
+            status = Status.PASSED
             error_type = ""
 
     expected_string, query_string, expected_string_red, query_string_red = generate_html_for_xml(

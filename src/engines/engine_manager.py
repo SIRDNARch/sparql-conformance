@@ -1,0 +1,98 @@
+from abc import ABC, abstractmethod
+from typing import Tuple
+
+from src.config import Config
+
+
+class EngineManager(ABC):
+    """Abstract base class for SPARQL engine managers"""
+
+    @abstractmethod
+    def setup(self,
+              config: Config,
+              graph_paths: Tuple[Tuple[str, str], ...]
+              ) -> Tuple[bool, bool, str, str]:
+        """
+        Set up the engine for testing.
+
+        Args:
+            config: Test suite config, used to set engine-specific settings
+            graph_paths: ex. default graph + named graph (('graph_path', '-'),
+                            ('graph_path2', 'graph_name2'))
+
+        Returns:
+            index_success (bool), server_success (bool), index_log (str), server_log (str)
+        """
+        pass
+
+    @abstractmethod
+    def cleanup(self, config: Config):
+        """Clean up the test environment after testing"""
+        pass
+
+    @abstractmethod
+    def query(self, config: Config, query: str, result_format: str) -> Tuple[int, str]:
+        """
+        Send a SPARQL query to the engine and return the result
+
+        Args:
+            config: Test suite config, used to set engine-specific settings
+            query: The SPARQL query to be executed
+            result_format: Type of the result
+
+        Returns:
+           HTTP status code (int), query result (str)
+        """
+        pass
+
+    @abstractmethod
+    def update(self, config: Config, query: str) -> Tuple[int, str]:
+        """
+        Send a SPARQL update query to the engine and return the result
+
+        Args:
+            config: Test suite config, used to set engine-specific settings
+            query: The SPARQL update query to be executed
+
+        Returns:
+           HTTP status code (int), response (str)
+        """
+        pass
+
+    @abstractmethod
+    def protocol_endpoint(self) -> str:
+        """
+        Returns the name of the protocol endpoint for the engine.
+        Used to replace the standard endpoint with the
+        engine-specific endpoint in the protocol tests.
+        Ex. POST /sparql/ HTTP/1.1 -> POST /qlever/ HTTP/1.1
+        """
+        pass
+
+    def protocol_update_endpoint(self) -> str:
+        """
+        Returns the endpoint for protocol update requests.
+
+        Engines with a dedicated update route can override this.
+        Default is to reuse the query protocol endpoint.
+        """
+        return self.protocol_endpoint()
+
+    def default_graph_construct_query(self) -> str:
+        """
+        Returns a CONSTRUCT query that retrieves all triples from the default graph.
+
+        Engines that store the default graph under a named graph IRI (e.g. QLever's
+        ql:default-graph) must override this to use the appropriate GRAPH clause.
+        """
+        return "CONSTRUCT {?s ?p ?o} WHERE { ?s ?p ?o }"
+
+    def activate_syntax_test_mode(self, server_address: str, port: str):
+        """
+        Called once before syntax tests run, after the server has started.
+
+        Override this if the engine needs a one-time configuration call to return
+        proper error responses for syntactically invalid queries (rather than
+        silently accepting them). Default is a no-op.
+        """
+        pass

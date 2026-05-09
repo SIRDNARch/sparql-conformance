@@ -1,14 +1,7 @@
 import json
-from backend.models import FAILED, PASSED, INTENDED, RESULTS_NOT_THE_SAME, INTENDED_MSG
+from typing import List, Tuple
 
-
-def read_json_file(file_path: str):
-    return json.load(file_path)
-
-
-def write_json_file(file_path: str, json_data):
-    with open(file_path, "w") as file:
-        json.dump(json_data, file, indent=4)
+from src.test_object import Status, ErrorMessage
 
 
 def handle_bindings(
@@ -52,7 +45,7 @@ def handle_bindings(
             label = ""
             end_label = ""
         parts.append(
-            f"{label}{json_to_string(binding, {}, level + 1)}{end_label}")
+            f"{label}{json_to_string(binding, {},mark_red, level + 1)}{end_label}")
     parts.append("\n" + " " * (indent * level) + "]")
     return "".join(parts)
 
@@ -60,7 +53,7 @@ def handle_bindings(
 def json_dict(
         indent: int,
         level: int,
-        json_dict: dict,
+        json_dictionary: dict,
         remaining_dict: dict,
         mark_red: list) -> str:
     """
@@ -73,7 +66,7 @@ def json_dict(
     Parameters:
         indent (int): Number of spaces used for indentation.
         level (int): Current nesting level for correct indentation.
-        json_dict (dict): Dictionary to format.
+        json_dictionary (dict): Dictionary to format.
         remaining_dict (dict): Dictionary used for comparison to determine highlighting.
         mark_red (list): List containing the elements that must be highlighted red.
 
@@ -81,7 +74,7 @@ def json_dict(
         str: An HTML-formatted string representing the dictionary with highlighted elements.
     """
     parts = ["{"]
-    for i, (key, value) in enumerate(json_dict.items()):
+    for i, (key, value) in enumerate(json_dictionary.items()):
         if i > 0:
             parts.append(", ")
         parts.append("\n" + " " * (indent * (level + 1)))
@@ -114,7 +107,7 @@ def json_dict(
 def json_list(
         indent: int,
         level: int,
-        json_list: list,
+        json_list_items: list,
         remaining_list: list) -> str:
     """
     Formats a list with HTML labels as needed for highlighting.
@@ -125,14 +118,14 @@ def json_list(
     Parameters:
         indent (int): Number of spaces used for indentation.
         level (int): Current nesting level for correct indentation.
-        json_list (list): List of items to format.
+        json_list_items (list): List of items to format.
         remaining_list (list): List used for comparison to determine highlighting.
 
     Returns:
         str: An HTML-formatted string representing the list with highlighted elements.
     """
     parts = ["["]
-    for i, item in enumerate(json_list):
+    for i, item in enumerate(json_list_items):
         if i > 0:
             parts.append(", ")
         parts.append("\n" + " " * (indent * (level + 1)))
@@ -194,7 +187,7 @@ def json_elements_equal(
         element1: dict,
         element2: dict,
         compare_with_intended_behaviour: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         number_types: list,
         map_bnodes: dict) -> bool:
     """
@@ -244,8 +237,7 @@ def json_elements_equal(
                                 field1.get(sub_key)) == float(
                                 field2.get(sub_key)):
                             continue
-                    if ((str(alias.get(str(field1.get(sub_key)))) == str(field2.get(sub_key))) or (str(alias.get(
-                            str(field2.get(sub_key)))) == str(field1.get(sub_key)))) and compare_with_intended_behaviour:
+                    if compare_with_intended_behaviour and ((field1.get(sub_key), field2.get(sub_key)) in alias or (field2.get(sub_key), field1.get(sub_key)) in alias):
                         continue
                     return False
         else:
@@ -258,7 +250,7 @@ def remove_once_found(
         list1: list,
         list2: list,
         compare_with_intended_behaviour: bool,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         number_types: list,
         map_bnodes: dict) -> list:
     """
@@ -268,7 +260,7 @@ def remove_once_found(
         list1 (list): The first list to compare.
         list2 (list): The second list to compare.
         compare_with_intended_behaviour (bool): Bool to determine whether to use intended behavior aliases in comparison.
-        alias (dict): Dictionary with aliases for datatypes ex. int = integer .
+        alias (List[Tuple[str, str]]): Dictionary with aliases for datatypes ex. int = integer .
         number_types (list): List containing all datatypes that should be used as numbers.
         map_bnodes (dict): Dictionary mapping the used bnodes.
 
@@ -297,7 +289,7 @@ def remove_once_found(
 def compare_json(
         expected_json: str,
         query_json: str,
-        alias: dict,
+        alias: List[Tuple[str, str]],
         number_types: list) -> tuple:
     """
     Compares two JSON objects and identifies differences in their "head" and "results" sections.
@@ -309,34 +301,29 @@ def compare_json(
     Parameters:
         expected_json (str): The expected JSON content as a string.
         query_json (str): The query JSON content as a string.
-        alias (dict): Dictionary with aliases for datatypes ex. int = integer .
+        alias (List[Tuple[str, str]]): Dictionary with aliases for datatypes ex. int = integer .
         number_types (list): List containing all datatypes that should be used as numbers.
-        map_bnodes (dict): Dictionary mapping the used bnodes.
 
     Returns:
         tuple: A tuple containing the status and error type.
     """
     map_bnodes = {}
-    status = FAILED
-    error_type = RESULTS_NOT_THE_SAME
+    status = Status.FAILED
+    error_type = ErrorMessage.RESULTS_NOT_THE_SAME
     expected = json.loads(expected_json)
     query = json.loads(query_json)
 
     vars1 = []
-    unique_vars1 = []
     vars2 = []
-    unique_vars2 = []
 
     # Compare and remove similar parts in "head" section
     if expected.get("head") is not None and expected.get(
             "head").get("vars") is not None:
         vars1 = expected.get("head").get("vars")
-        unique_vars1 = vars1
 
     if query.get("head") is not None and query.get(
             "head").get("vars") is not None:
         vars2 = query.get("head").get("vars")
-        unique_vars2 = vars2
 
     if expected.get("head") is not None and expected.get(
             "head").get("vars") is not None:
@@ -369,7 +356,7 @@ def compare_json(
             query["results"]["bindings"]) == 0 and len(
             expected["head"]["vars"]) == 0 and len(
                 query["head"]["vars"]) == 0:
-            status = PASSED
+            status = Status.PASSED
             error_type = ""
         else:
             unique_bindings1 = remove_once_found(
@@ -377,8 +364,8 @@ def compare_json(
             unique_bindings2 = remove_once_found(
                 bindings2, bindings1, True, alias, number_types, map_bnodes)
             if len(unique_bindings1) == 0 and len(unique_bindings2) == 0:
-                status = INTENDED
-                error_type = INTENDED_MSG
+                status = Status.INTENDED
+                error_type = ErrorMessage.INTENDED_MSG
         expected_string = generate_highlighted_string_json(
             json.loads(expected_json), expected, unique_bindings1)
         query_string = generate_highlighted_string_json(
@@ -393,7 +380,7 @@ def compare_json(
         if str(bool1) == str(bool2):
             del expected["boolean"]
             del query["boolean"]
-            status = PASSED
+            status = Status.PASSED
             error_type = ""
         expected_string = generate_highlighted_string_json(
             json.loads(expected_json), expected, [])

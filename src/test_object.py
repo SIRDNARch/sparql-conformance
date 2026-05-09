@@ -1,58 +1,44 @@
-from typing import Optional, List, Union, Dict, Any
-from backend.util import local_name, read_file, escape
+from enum import Enum
+from typing import Optional, List, Union, Dict, Any, TYPE_CHECKING
+
+from src.config import Config
+from src.util import local_name, read_file, escape
 import os
 import json
 
-# Test status constants
-FAILED = 'Failed'
-PASSED = 'Passed'
-INTENDED = 'Intended deviation'
-QUERY_EXCEPTION = 'Query error'
-REQUEST_ERROR = 'Request error'
-UNDEFINED_ERROR = 'Undefined error'
-INDEX_BUILD_ERROR = 'Indexing error'
-SERVER_ERROR = 'Server error'
-NOT_TESTED = 'Not tested'
-RESULTS_NOT_THE_SAME = 'Results differ'
-INTENDED_MSG = 'Intended deviation from SPARQL standard'
-EXPECTED_EXCEPTION = 'Expected error response from query'
-FORMAT_ERROR = 'Result format error'
-NOT_SUPPORTED = 'Content type not supported'
-NEGATIVE_QUERY_RESPONSE = [QUERY_EXCEPTION, REQUEST_ERROR, NOT_SUPPORTED, UNDEFINED_ERROR]
+if TYPE_CHECKING:
+    from src.protocol_request import ProtocolRequest
 
+class Status(str, Enum):
+    PASSED = "Passed"
+    INTENDED = "Intended deviation"
+    FAILED = "Failed"
+    NOT_TESTED = "Not tested"
 
-class Config:
-    """Configuration class for SPARQL test suite execution."""
+class ErrorMessage(str, Enum):
+    QUERY_EXCEPTION = 'Query error'
+    REQUEST_ERROR = 'Request error'
+    UNDEFINED_ERROR = 'Undefined error'
+    INDEX_BUILD_ERROR = 'Indexing error'
+    SERVER_ERROR = 'Server error'
+    NOT_TESTED = 'Not tested'
+    RESULTS_NOT_THE_SAME = 'Results differ'
+    INTENDED_MSG = 'Intended deviation from SPARQL standard'
+    EXPECTED_EXCEPTION = 'Expected error response from query'
+    FORMAT_ERROR = 'Result format error'
+    NOT_SUPPORTED = 'Not supported'
+    CONTENT_TYPE_NOT_SUPPORTED = "Content type not supported"
 
-    def __init__(self, config: Dict[str, Any]):
-        """
-        Initialize configuration with settings from dictionary.
-        """
-        self.HOST = config.get('HOST')
-        self.GRAPHSTORE = config.get('GRAPHSTORE')
-        self.NEWPATH = config.get('NEWPATH')
-        self.alias = config.get('alias')
-        self.number_types = config.get('number_types')
-        self.path_to_test_suite = os.path.abspath(config.get('path_to_testsuite'))
-        self.path_to_binaries = os.path.abspath(config.get('path_to_binaries'))
-        self.command_index = config.get('command_index')
-        self.command_start_server = config.get('command_start_server')
-        self.command_stop_server = config.get('command_stop_server')
-        self.command_remove_index = config.get('command_remove_index')
-        self.server_address = config.get('server_address')
-        self.port = config.get('port')
-        self.exclude = config.get('exclude')
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary format."""
-        return {
-            'alias': self.alias,
-            'number_types': self.number_types,
-            'HOST': self.HOST,
-            'GRAPHSTORE': self.GRAPHSTORE,
-            'NEWPATH': self.NEWPATH
-        }
-
+    @classmethod
+    def is_query_error(cls, error: str) -> bool:
+        """Subset of query-related errors."""
+        return error in [
+            cls.QUERY_EXCEPTION,
+            cls.REQUEST_ERROR,
+            cls.NOT_SUPPORTED,
+            cls.UNDEFINED_ERROR,
+            cls.CONTENT_TYPE_NOT_SUPPORTED,
+        ]
 
 def process_graph_data(graph_data: Union[None, str, Dict, List], target_dict: Dict[str, str]) -> None:
     """
@@ -100,6 +86,7 @@ class TestObject:
             entailment_profile: Optional[str],
             feature: List[str],
             config: Config,
+            protocol_requests: Optional[List['ProtocolRequest']] = None,
     ):
         """
         Initialize a test object with all its properties.
@@ -134,8 +121,9 @@ class TestObject:
         self.entailment_profile = entailment_profile
         self.feature = feature
         self.config = config
+        self.protocol_requests = protocol_requests
 
-        self.status = NOT_TESTED
+        self.status = Status.NOT_TESTED
         self.index_files: Dict[str, str] = {}
         self.result_files: Dict[str, str] = {}
 
