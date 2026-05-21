@@ -142,7 +142,7 @@ class QleverBinariesManager(EngineManager):
             f" -s {settings_file}"
             f" --vocabulary-type on-disk-compressed"
             f" {input_options}"
-            f" 2>&1 | tee {log_file}"
+            f" > {log_file} 2>&1"
         )
 
         try:
