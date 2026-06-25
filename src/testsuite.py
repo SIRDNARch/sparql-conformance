@@ -2,6 +2,7 @@ import bz2
 import io
 import json
 import os
+import re
 from typing import List, Dict, Tuple
 
 import rdflib
@@ -19,6 +20,7 @@ try:
 except ImportError:
     GraphdbManager = None
 from src.engines.engine_manager import EngineManager
+from src.mock_sparql_server import MockSPARQLServer
 from src.json_tools import compare_json
 from src.protocol_tools import run_protocol_test, run_protocol_test_from_action
 from src.rdf_tools import compare_ttl
@@ -27,12 +29,60 @@ from src.tsv_csv_tools import compare_sv
 from src.xml_tools import compare_xml
 
 
+def _augment_with_protocol_data(
+        graph_path: Tuple[Tuple[str, str], ...],
+) -> Tuple[Tuple[str, str], ...]:
+    """Add the standard W3C protocol test data files (data0–data3.rdf)."""
+    path_to_data = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+    result = graph_path
+    for i in range(4):
+        result = result + ((
+            os.path.join(path_to_data, f"data{i}.rdf"),
+            f"http://kasei.us/2009/09/sparql/data/data{i}.rdf",
+        ),)
+    return result
+
+
+def _get_mock_host(config) -> str:
+    """Return the host address that containerized engines can use to reach the mock server."""
+    import platform
+    import subprocess
+    import socket as _socket
+    system = getattr(config, 'system', 'native')
+    if system not in ('docker', 'podman'):
+        return '127.0.0.1'
+    if platform.system() == 'Darwin':
+        return 'host.docker.internal'
+    cmd = 'docker' if system == 'docker' else 'podman'
+    network = 'bridge' if system == 'docker' else 'podman'
+    try:
+        result = subprocess.run(
+            [cmd, 'network', 'inspect', network,
+             '--format', '{{range .IPAM.Config}}{{.Gateway}}{{end}}'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    try:
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        if not ip.startswith('127.'):
+            return ip
+    except Exception:
+        pass
+    return '172.17.0.1'
+
+
 class TestSuite:
     """
     A class to represent a test suite for SPARQL using QLever.
     """
 
-    def __init__(self, name: str, tests: Dict[str, Dict[Tuple[Tuple[str, str], ...], List[TestObject]]], test_count, config: Config, engine_manager: EngineManager):
+    def __init__(self, name: str, tests: Dict[str, Dict[Tuple[Tuple[str, str], ...], List[TestObject]]], test_count, config: Config, engine_manager: EngineManager, results_dir: str = "./results"):
         """
         Constructs all the necessary attributes for the TestSuite object.
 
@@ -47,6 +97,7 @@ class TestSuite:
         self.failed = 0
         self.passed_failed = 0
         self.engine_manager = engine_manager
+        self.results_dir = results_dir
 
     def evaluate_query(
             self,
@@ -204,22 +255,42 @@ class TestSuite:
         return index_success and server_success
 
     def process_failed_response(self, test, query_response: tuple):
-        if "exception" in query_response[1]:
-            query_log = json.loads(
-                query_response[1])["exception"].replace(
-                ";", ";\n")
+        body = query_response[1]
+        if "exception" in body:
+            try:
+                query_log = json.loads(body)["exception"].replace(";", ";\n")
+            except Exception:
+                query_log = body
             error_type = ErrorMessage.QUERY_EXCEPTION
-        elif "HTTP Request" in query_response[1]:
+        elif "HTTP Request" in body:
             error_type = ErrorMessage.REQUEST_ERROR
-            query_log = query_response[1]
-        elif "not supported" in query_response[1]:
+            query_log = body
+        elif "not supported" in body:
             error_type = ErrorMessage.NOT_SUPPORTED
-            if "content type" in query_response[1]:
+            if "content type" in body:
                 error_type = ErrorMessage.CONTENT_TYPE_NOT_SUPPORTED
-            query_log = query_response[1]
+            query_log = body
+        elif re.search(r'arqinternalerrorexception|peek\s+iterator\s+is\s+already\s+empty', body, re.IGNORECASE):
+            error_type = ErrorMessage.ENGINE_INTERNAL_ERROR
+            query_log = body
+        elif re.search(r'\b404\b|\bnot\s+found\b', body, re.IGNORECASE):
+            error_type = ErrorMessage.HTTP_NOT_FOUND
+            query_log = body
+        elif re.search(r'undefined\s+procedure|unknown\s+function', body, re.IGNORECASE):
+            error_type = ErrorMessage.UNDEFINED_FUNCTION
+            query_log = body
+        elif re.search(r'required\s+argument.*not\s+supplied', body, re.IGNORECASE):
+            error_type = ErrorMessage.FUNCTION_ARGUMENT_ERROR
+            query_log = body
+        elif re.search(r'non\s+numeric\s+argument|needs\s+a\s+(string|datetime)|cannot\s+convert.*to\s+datetime', body, re.IGNORECASE):
+            error_type = ErrorMessage.TYPE_ERROR
+            query_log = body
+        elif re.search(r'sparql\s+compiler|transitive\s+start\s+not\s+given|no\s+column\s+', body, re.IGNORECASE):
+            error_type = ErrorMessage.PARSE_ERROR
+            query_log = body
         else:
             error_type = ErrorMessage.UNDEFINED_ERROR
-            query_log = query_response[1]
+            query_log = body
         setattr(test, "query_log", query_log)
         self.update_test_status(test, Status.FAILED, error_type)
 
@@ -262,15 +333,19 @@ class TestSuite:
         """
         for graph in graphs_list_of_tests:
             log.info(f"Running update tests for graph / graphs: {graph}")
-            for test in graphs_list_of_tests[graph]:
+            if not self.prepare_test_environment(graph, graphs_list_of_tests[graph]):
+                continue
+            for i, test in enumerate(graphs_list_of_tests[graph]):
                 log.info(f"Running: {test.name}")
-                if not self.prepare_test_environment(
-                        graph, graphs_list_of_tests[graph]):
-                    # If the environment is not prepared, skip all tests for this graph.
-                    break
+                if i > 0:
+                    if not self.engine_manager.reset_graphs(self.config, graph):
+                        self.update_graph_status(
+                            graphs_list_of_tests[graph][i:],
+                            Status.FAILED, ErrorMessage.SERVER_ERROR)
+                        break
                 # Execute the update query.
                 query_update_result = self.engine_manager.update(self.config, test.query_file)
-                
+
                 # If the update query was successful, retrieve the current state of all graphs
                 # and check if the results match the expected results.
                 if 200 <= query_update_result[0] < 300:
@@ -285,7 +360,7 @@ class TestSuite:
                     )
                     actual_state_of_graphs.append(construct_graph[1])
                     expected_state_of_graphs.append(test.result_file)
-                    
+
                     # Handle named graphs.
                     if test.result_files:
                         for graph_label, expected_graph in test.result_files.items():
@@ -301,13 +376,13 @@ class TestSuite:
                 else:
                     self.process_failed_response(test, query_update_result)
 
-                if os.path.exists("./TestSuite.server-log.txt"):
-                    server_log = util.read_file("./TestSuite.server-log.txt")
-                    self.log_for_all_tests(
-                        graphs_list_of_tests[graph],
-                        "server_log",
-                        util.remove_date_time_parts(server_log))
-                self.engine_manager.cleanup(self.config)
+            if os.path.exists("./TestSuite.server-log.txt"):
+                server_log = util.read_file("./TestSuite.server-log.txt")
+                self.log_for_all_tests(
+                    graphs_list_of_tests[graph],
+                    "server_log",
+                    util.remove_date_time_parts(server_log))
+            self.engine_manager.cleanup(self.config)
 
     def run_syntax_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
         """
@@ -334,7 +409,7 @@ class TestSuite:
                         test.query_file,
                         result_format)
 
-                if query_result[0] != 200:
+                if not (200 <= query_result[0] < 400):
                     self.process_failed_response(test, query_result)
                 else:
                     setattr(test, "query_log", query_result[1])
@@ -363,55 +438,41 @@ class TestSuite:
         """
         for graph_path in graphs_list_of_tests:
             log.info(f"Running protocol tests for graph: {graph_path}")
-            # Work around for issue #25, missing data for protocol tests
-            path_to_data = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
-            graph_paths = graph_path
-            for i in range(4):
-                path_to_graph = os.path.join(path_to_data, f"data{i}.rdf")
-                name_of_graph = f"http://kasei.us/2009/09/sparql/data/data{i}.rdf"
-                new_path: Tuple[str, str] = (path_to_graph, name_of_graph)
-                graph_paths = graph_paths + (new_path,)
-            for test in graphs_list_of_tests[graph_path]:
+            # Work around for issue #25: add standard W3C protocol test data files.
+            graph_paths = _augment_with_protocol_data(graph_path)
+            if not self.prepare_test_environment(
+                    graph_paths, graphs_list_of_tests[graph_path]):
+                continue
+            for i, test in enumerate(graphs_list_of_tests[graph_path]):
                 log.info(f"Running: {test.name}")
-                if not self.prepare_test_environment(
-                        graph_paths, graphs_list_of_tests[graph_path]):
-                    break
+                if i > 0:
+                    if not self.engine_manager.reset_graphs(self.config, graph_paths):
+                        self.update_graph_status(
+                            graphs_list_of_tests[graph_path][i:],
+                            Status.FAILED, ErrorMessage.SERVER_ERROR)
+                        break
+                extracted_sent_requests = ''
+                extracted_expected_responses = ''
+                got_responses = ''
                 if test.protocol_requests:
                     status, error_type, extracted_expected_responses, extracted_sent_requests, got_responses, newpath = run_protocol_test_from_action(
                         self.engine_manager, test, test.protocol_requests, '')
-                    if os.path.exists("./TestSuite.server-log.txt"):
-                        server_log = util.read_file(
-                            "./TestSuite.server-log.txt")
-                        self.log_for_all_tests(
-                            graphs_list_of_tests[graph_path],
-                            "server_log",
-                            util.remove_date_time_parts(server_log))
-                    self.engine_manager.cleanup(self.config)
                     self.update_test_status(test, status, error_type)
                 elif test.comment:
                     status, error_type, extracted_expected_responses, extracted_sent_requests, got_responses, newpath = run_protocol_test(
                         self.engine_manager, test, test.comment, '')
-
-                    if os.path.exists("./TestSuite.server-log.txt"):
-                        server_log = util.read_file(
-                            "./TestSuite.server-log.txt")
-                        self.log_for_all_tests(
-                            graphs_list_of_tests[graph_path],
-                            "server_log",
-                            util.remove_date_time_parts(server_log))
-                    self.engine_manager.cleanup(self.config)
                     self.update_test_status(test, status, error_type)
-                else:
-                    extracted_sent_requests = ''
-                    extracted_expected_responses = ''
-                    got_responses = ''
                 setattr(test, "protocol", test.comment)
                 setattr(test, "protocol_sent", extracted_sent_requests)
-                setattr(
-                    test,
-                    "response_extracted",
-                    extracted_expected_responses)
+                setattr(test, "response_extracted", extracted_expected_responses)
                 setattr(test, "response", got_responses)
+            if os.path.exists("./TestSuite.server-log.txt"):
+                server_log = util.read_file("./TestSuite.server-log.txt")
+                self.log_for_all_tests(
+                    graphs_list_of_tests[graph_path],
+                    "server_log",
+                    util.remove_date_time_parts(server_log))
+            self.engine_manager.cleanup(self.config)
 
     def run_graphstore_protocol_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
         """
@@ -457,6 +518,58 @@ class TestSuite:
                     util.remove_date_time_parts(server_log))
             self.engine_manager.cleanup(self.config)
 
+    def run_federation_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
+        """
+        Executes SERVICE federation tests.
+
+        For each test a local mock SPARQL server is started, populated with the
+        data from qt:serviceData in the manifest, and the SERVICE endpoint URLs
+        in the query are rewritten in memory to point at the mock before the
+        query is sent to the main engine.  Test files on disk are not modified.
+        """
+        for graph_key in graphs_list_of_tests:
+            for test in graphs_list_of_tests[graph_key]:
+                log.info(f"Running federation test: {test.name}")
+
+                service_data = test.action_node.get('serviceData', []) if isinstance(test.action_node, dict) else []
+                if isinstance(service_data, dict):
+                    service_data = [service_data]
+
+                mock = MockSPARQLServer()
+                url_map: dict = {}
+                for sd in service_data:
+                    endpoint_url = sd.get('endpoint') if isinstance(sd, dict) else None
+                    data_path = sd.get('data') if isinstance(sd, dict) else None
+                    if endpoint_url and data_path:
+                        mock.add_endpoint(endpoint_url, util.read_file(data_path))
+                        url_map[endpoint_url] = None
+                mock.start()
+                mock_host = _get_mock_host(self.config)
+                for orig in url_map:
+                    url_map[orig] = mock.local_url_for(orig, host=mock_host)
+
+                query_text = test.query_file
+                for orig, local in url_map.items():
+                    query_text = query_text.replace(orig, local)
+
+                if not self.prepare_test_environment(graph_key, [test]):
+                    mock.stop()
+                    continue
+
+                query_result = self.engine_manager.query(self.config, query_text, test.result_format)
+
+                if os.path.exists('./TestSuite.server-log.txt'):
+                    setattr(test, 'server_log', util.remove_date_time_parts(
+                        util.read_file('./TestSuite.server-log.txt')))
+
+                mock.stop()
+                self.engine_manager.cleanup(self.config)
+
+                if query_result[0] == 200:
+                    self.evaluate_query(test.result_file, query_result[1], test, test.result_format)
+                else:
+                    self.process_failed_response(test, query_result)
+
     def analyze(self):
         """
         Method to index and start the server for a specific test.
@@ -483,6 +596,7 @@ class TestSuite:
             self.run_syntax_tests(self.tests["syntax"])
             self.run_protocol_tests(self.tests["protocol"])
             self.run_graphstore_protocol_tests(self.tests["graphstoreprotocol"])
+            self.run_federation_tests(self.tests.get("federation", {}))
         except KeyboardInterrupt:
             log.warning("Interrupted by user.")
             self.engine_manager.cleanup(self.config)
@@ -533,8 +647,8 @@ class TestSuite:
 
     def generate_json_file(self):
         """Generates a JSON file with the test results (single-suite v1 format)."""
-        os.makedirs("./results", exist_ok=True)
+        os.makedirs(self.results_dir, exist_ok=True)
         data, info = self.build_results_dict()
         data["info"] = {"name": "info", **info}
         log.info("Writing file...")
-        self.compress_json_bz2(data, f"./results/{self.name}.json.bz2")
+        self.compress_json_bz2(data, os.path.join(self.results_dir, f"{self.name}.json.bz2"))

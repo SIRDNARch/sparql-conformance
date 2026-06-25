@@ -19,12 +19,12 @@ from src.config import Config
 def make_args(config: Config, **overrides):
     base = dict(
         # GENERAL used by more than one.
-        name="qlever-sparql-conformance",
+        name=config.run_id,
         host_name=config.server_address,
         port=config.port,
         system=config.system,
         image=config.image,
-        server_container="qlever-sparql-conformance-server-container",
+        server_container=f"{config.run_id}-server-container",
         access_token="abc",
         only_pso_and_pos_permutations=False,
         use_patterns='yes',
@@ -54,7 +54,7 @@ def make_args(config: Config, **overrides):
         no_warmup=True,
         run_in_foreground=False,
         # INDEX.
-        index_container = "qlever-sparql-conformance-index-container",
+        index_container=f"{config.run_id}-index-container",
         cat_input_files=None,
         input_files='*.ttl',
         format='ttl',
@@ -134,8 +134,9 @@ def read_file(file_path: str) -> str:
         str: The content of the file.
     """
     try:
-        data = open(file_path, "r", encoding="utf-8").read()
-    except BaseException:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = f.read()
+    except OSError:
         data = ""
     return data
 

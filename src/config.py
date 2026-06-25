@@ -17,8 +17,10 @@ class Config:
                  include: List[str] = None,
                  server_binary: str = "qlever-server",
                  index_binary: str = "qlever-index",
+                 run_id: str = "qlever-sparql-conformance",
                  ):
         self.server_address = 'localhost'
+        self.run_id = run_id
         self.image = image
         self.system = system
         self.port = port

@@ -4,6 +4,13 @@ from pathlib import Path
 from rdflib import Graph, Namespace, RDF, URIRef
 from typing import Union, Dict, Any, List, Tuple, Optional, Set
 
+try:
+    from qlever.log import log
+except ImportError:
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    log = logging.getLogger(__name__)
+
 from .config import Config
 from .util import uri_to_path, local_name
 from .test_object import TestObject
@@ -106,8 +113,6 @@ def collect_tests_by_graph(tests: List[TestObject]) -> Dict[str, Dict[Tuple[Tupl
     The resulting dictionary has the following structure:
     {'query': { (('graph_path', 'graph_name'), ...): [Test1, Test2, ...], ...}, ...}
     """
-    if len(tests) == 0:
-        return {}
     type_to_category: Dict[str, str] = {
         'QueryEvaluationTest': 'query',
         'CSVResultFormatTest': 'format',
@@ -131,6 +136,7 @@ def collect_tests_by_graph(tests: List[TestObject]) -> Dict[str, Dict[Tuple[Tupl
         'protocol': dict(),
         'graphstoreprotocol': dict(),
         'service': dict(),
+        'federation': dict(),
     }
 
     fallback_graph = (str(Path(__file__).parent / 'data' / 'empty.ttl'), '-')
@@ -166,6 +172,11 @@ def collect_tests_by_graph(tests: List[TestObject]) -> Dict[str, Dict[Tuple[Tupl
 
         key = tuple(sorted(set(graph_refs)))
         category = type_to_category.get(test.type_name)
+        if category == 'query' and isinstance(test.action_node, dict) and 'serviceData' in test.action_node:
+            category = 'federation'
+        if category is None:
+            log.warning(f"Unknown test type '{test.type_name}' for test '{test.name}' — skipped")
+            continue
         if category:
             if key in graph_index[category]:
                 graph_index[category][key].append(test)

@@ -140,6 +140,46 @@ def default_graph_construct_query(self) -> str:
     )
 ```
 
+### `reset_graphs(config: Config, graph_paths: ...) -> bool`
+
+Called between consecutive tests in the same graph group for **update** and **protocol** test types. The purpose is to restore the engine to the original graph state so each test starts clean — without the side-effects left by the previous test's UPDATE query.
+
+The default implementation does a full `cleanup()` + `setup()`, which is always correct but restarts the server for every test. Override this when your engine supports a cheaper in-place reset:
+
+```python
+def reset_graphs(
+    self,
+    config: Config,
+    graph_paths: Tuple[Tuple[str, str], ...],
+) -> bool:
+    # 1. Wipe all data
+    status, _ = self.update(config, "CLEAR ALL")
+    if not (200 <= status < 300):
+        # Fall back to full restart on failure
+        self.cleanup(config)
+        ok_i, ok_s, _, _ = self.setup(config, graph_paths)
+        return ok_i and ok_s
+
+    # 2. Re-upload each graph via Graph Store HTTP PUT
+    for graph_path, graph_name in graph_paths:
+        ttl = read_file(graph_path)  # load/convert as needed
+        params = {"default": ""} if graph_name == "-" else {"graph": graph_name}
+        r = requests.put(
+            f"http://{config.server_address}:{config.port}/sparql",
+            params=params,
+            data=ttl.encode("utf-8"),
+            headers={"Content-Type": "text/turtle"},
+        )
+        if not (200 <= r.status_code < 300):
+            self.cleanup(config)
+            ok_i, ok_s, _, _ = self.setup(config, graph_paths)
+            return ok_i and ok_s
+
+    return True
+```
+
+Returning `False` causes the harness to mark all remaining tests in the group as FAILED with a server error.
+
 ### `activate_syntax_test_mode(server_address: str, port: str)`
 
 Called before syntax tests if your engine needs a special mode to return error responses for invalid queries rather than silently accepting them. Default implementation does nothing.
