@@ -2,7 +2,7 @@ import json
 import re
 import socket
 import time
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 from src.engines.engine_manager import EngineManager
@@ -79,6 +79,7 @@ def prepare_request(engine_manager: EngineManager, test: TestObject, request_wit
 def _replace_endpoint_in_request_line(
         request_line: str,
         endpoint: str,
+        source_endpoint: str = 'sparql',
 ) -> str:
     parts = request_line.split(' ', 2)
     if len(parts) < 2:
@@ -96,7 +97,7 @@ def _replace_endpoint_in_request_line(
     changed = False
     replaced_at_end = False
     for i, path_part in enumerate(path_parts):
-        if path_part == 'sparql':
+        if path_part == source_endpoint:
             replaced_at_end = i == len(path_parts) - 2 and path_parts[-1] == ''
             path_parts = path_parts[:i] + endpoint_parts + path_parts[i + 1:]
             changed = True
@@ -116,6 +117,41 @@ def _replace_endpoint_in_request_line(
     if not version:
         return f'{method} {new_target}'
     return f'{method} {new_target} {version}'
+
+
+def _apply_template_values(value: str, template_values: Dict[str, str]) -> str:
+    for key, replacement in template_values.items():
+        value = value.replace(key, replacement)
+    return value
+
+
+def prepare_graphstore_request_from_action(
+        test: TestObject,
+        req: ProtocolRequest,
+        template_values: Dict[str, str]) -> Tuple[str, str]:
+    absolute_path = _apply_template_values(req.absolute_path, template_values)
+    first_line = _replace_endpoint_in_request_line(
+        f'{req.method} {absolute_path} HTTP/{req.http_version}',
+        test.config.GRAPHSTORE,
+        source_endpoint='gsp',
+    )
+
+    authority = req.connection_authority or 'localhost'
+    header_lines = [first_line, f'Host: {authority}']
+    for h in req.headers:
+        if h.name.lower() != 'content-length':
+            value = _apply_template_values(h.value, template_values)
+            header_lines.append(f'{h.name}: {value}')
+
+    if 'authorization:' not in '\n'.join(header_lines).lower():
+        header_lines.append('Authorization: Bearer abc')
+
+    request_body = _apply_template_values(req.body or '', template_values)
+    body_encoding = 'utf-16' if req.character_encoding.lower() == 'utf-16' else 'utf-8'
+    content_length = len(request_body.encode(body_encoding))
+    header_lines.append(f'Content-Length: {content_length}')
+
+    return '\r\n'.join(header_lines) + '\r\n\r\n', request_body
 
 
 def prepare_response(test: TestObject, request_with_reponse: str, newpath: str) -> dict[str, str | list[str]]:
@@ -265,6 +301,118 @@ def parse_chunked_body(response_body: str) -> str:
         i += chunk_size + 2
 
     return ''.join(result)
+
+
+def parse_raw_http_response(response: str) -> dict:
+    separator = '\r\n\r\n'
+    if separator in response:
+        header_text, body = response.split(separator, 1)
+    elif '\n\n' in response:
+        header_text, body = response.split('\n\n', 1)
+    else:
+        header_text, body = response, ''
+
+    lines = header_text.splitlines()
+    status_code: Optional[str] = None
+    if lines:
+        match = re.match(r'HTTP/\S+\s+(\d{3})', lines[0])
+        if match:
+            status_code = match.group(1)
+
+    headers: Dict[str, List[str]] = {}
+    for line in lines[1:]:
+        if ':' not in line:
+            continue
+        name, value = line.split(':', 1)
+        headers.setdefault(name.strip().lower(), []).append(value.strip())
+
+    if any('chunked' in value.lower()
+           for value in headers.get('transfer-encoding', [])):
+        try:
+            body = parse_chunked_body(body)
+        except ValueError:
+            pass
+
+    return {
+        'status_code': status_code,
+        'headers': headers,
+        'body': body,
+    }
+
+
+def _status_code_matches(expected: str, actual: Optional[str]) -> bool:
+    if actual is None:
+        return False
+    if len(expected) != len(actual):
+        return False
+    return all(e == 'x' or e == a for e, a in zip(expected, actual))
+
+
+def _media_type(value: str) -> str:
+    return value.split(';', 1)[0].strip().lower()
+
+
+def _response_header_matches(
+        expected_name: str,
+        expected_value: str,
+        actual_headers: Dict[str, List[str]]) -> bool:
+    values = actual_headers.get(expected_name.lower(), [])
+    if expected_name.lower() == 'content-type':
+        expected_media_type = _media_type(expected_value)
+        return any(_media_type(value) == expected_media_type for value in values)
+    return any(value.strip() == expected_value.strip() for value in values)
+
+
+def prepare_graphstore_response_from_action(req: ProtocolRequest) -> dict:
+    return {
+        'status_codes': list(req.expected_response.status_codes),
+        'headers': [
+            {'name': h.name, 'value': h.value}
+            for h in req.expected_response.headers
+        ],
+        'body': req.expected_response.body,
+        'expected_location': req.expected_response.expected_location,
+    }
+
+
+def compare_graphstore_response(
+        req: ProtocolRequest,
+        got_response: str) -> Tuple[bool, str]:
+    parsed_response = parse_raw_http_response(got_response)
+    expected_response = req.expected_response
+    status_code_match = (
+        not expected_response.status_codes
+        or any(
+            _status_code_matches(status_code, parsed_response['status_code'])
+            for status_code in expected_response.status_codes
+        )
+    )
+
+    headers_match = all(
+        _response_header_matches(
+            header.name,
+            header.value,
+            parsed_response['headers'])
+        for header in expected_response.headers
+    )
+
+    location = ''
+    expected_location = expected_response.expected_location
+    location_match = True
+    if expected_location is not None:
+        location_values = parsed_response['headers'].get('location', [])
+        location_match = bool(location_values)
+        if location_values:
+            location = location_values[0]
+
+    body_match = True
+    if expected_response.body is not None:
+        status, error_type, expected_string, query_string, expected_string_red, query_string_red = compare_ttl(
+            expected_response.body,
+            parsed_response['body'])
+        body_match = status == Status.PASSED
+
+    return status_code_match and headers_match and location_match and body_match, location
 
 
 def compare_response(expected_response: dict[str, str | list[str]], got_response: str, is_select: bool) -> Tuple[bool, str]:
@@ -449,3 +597,50 @@ def run_protocol_test_from_action(
     extracted_sent_requests = ''.join(r + '\n' for r in requests)
     got_responses_string = ''.join(r + '\n' for r in got_responses)
     return result, error_type, extracted_expected_responses, extracted_sent_requests, got_responses_string, newpath
+
+
+def run_graphstore_protocol_test_from_action(
+        test: TestObject,
+        protocol_requests: List[ProtocolRequest]) -> tuple:
+    server_address = 'localhost'
+    port = test.config.port
+    result = Status.FAILED
+    error_type = ErrorMessage.RESULTS_NOT_THE_SAME
+    status = []
+    requests = []
+    responses = []
+    got_responses = []
+    template_values: Dict[str, str] = {}
+    last_location = ''
+
+    for req in protocol_requests:
+        request_head, request_body = prepare_graphstore_request_from_action(
+            test,
+            req,
+            template_values)
+        requests.append(request_head + request_body)
+        response = prepare_graphstore_response_from_action(req)
+        responses.append(response)
+        body_encoding = 'utf-16' if req.character_encoding.lower() == 'utf-16' else 'utf-8'
+        tn_response = send_raw_http(
+            server_address,
+            int(port),
+            request_head,
+            request_body,
+            body_encoding)
+        got_responses.append(tn_response)
+        matching, location = compare_graphstore_response(req, tn_response)
+        expected_location = req.expected_response.expected_location
+        if expected_location is not None and location:
+            template_values[expected_location] = location
+            last_location = location
+        status.append(matching)
+
+    if all(status):
+        result = Status.PASSED
+        error_type = ''
+
+    extracted_expected_responses = ''.join(str(r) + '\n' for r in responses)
+    extracted_sent_requests = ''.join(r + '\n' for r in requests)
+    got_responses_string = ''.join(r + '\n' for r in got_responses)
+    return result, error_type, extracted_expected_responses, extracted_sent_requests, got_responses_string, last_location

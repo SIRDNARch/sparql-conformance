@@ -99,6 +99,7 @@ class TestObject:
             feature: List[str],
             config: Config,
             protocol_requests: Optional[List['ProtocolRequest']] = None,
+            requires: Optional[List[str]] = None,
     ):
         """
         Initialize a test object with all its properties.
@@ -134,6 +135,7 @@ class TestObject:
         self.feature = feature
         self.config = config
         self.protocol_requests = protocol_requests
+        self.requires = requires or []
 
         self.status = Status.NOT_TESTED
         self.index_files: Dict[str, str] = {}
@@ -192,6 +194,7 @@ class TestObject:
             'name': escape(self.name),
             'group': escape(self.group),
             'feature': escape(';'.join(self.feature)),
+            'requires': escape(';'.join(self.requires)),
             'comment': escape(self.comment),
             'approval': escape(self.approval),
             'approvedBy': escape(self.approved_by),
