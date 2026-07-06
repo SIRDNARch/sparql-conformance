@@ -38,6 +38,8 @@ python3 main.py \
 | `--exclude` | no | — | Comma-separated list of test names or group names to skip |
 | `--include` | no | — | Comma-separated list of test names or group names to run (all others skipped) |
 | `--type-alias` | no | — | JSON list of XSD type pairs treated as equivalent. See below. |
+| `--report` | no | `none` | Console output verbosity: `none`, `summary`, or `line`. See [Console output](#console-output). |
+| `--compare-to` | no | — | Path to a previous `<name>.json.bz2` run to compare against; prints regressions and fixes. See [Console output](#console-output). |
 
 ### Example: QLever
 
@@ -84,6 +86,39 @@ Results are written to `results/<name>.json.bz2`. The file contains a JSON objec
   "info": { "passed": 560, "tests": 620, "failed": 38, ... }
 }
 ```
+
+## Console output
+
+By default the run only prints progress and writes the JSON file. For readable
+feedback in the terminal, use `--report`:
+
+| `--report` | What it prints |
+|---|---|
+| `none` (default) | Nothing extra — unchanged behavior. |
+| `summary` | An end-of-run totals block (passed / failed / intended / not tested, per suite and overall) plus a list of the failed tests. |
+| `line` | A live colored `PASS` / `FAIL` / `INTD` line per test as it runs, plus the summary. |
+
+```bash
+python3 main.py --engine <engine-file> --name my-run \
+  --sparql11-dir ../rdf-tests/sparql/sparql11 --report line
+```
+
+Colors are only used when writing to a terminal; piping to a file (or setting
+`NO_COLOR`) produces plain text.
+
+### Comparing against a previous run
+
+Pass a previous result file to `--compare-to` to see what changed. It prints the
+**regressions** (tests that passed before and now fail) and **fixes** (tests that
+failed before and now pass):
+
+```bash
+python3 main.py --engine <engine-file> --name new-run \
+  --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --compare-to results/old-run.json.bz2
+```
+
+`--report` and `--compare-to` can be combined and work independently.
 
 ## Adding support for a new engine
 
