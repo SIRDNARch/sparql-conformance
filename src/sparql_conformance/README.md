@@ -1,59 +1,111 @@
-# Overview
-In this directory (./sparql_conformance) lives code relevant
-to execute the sparql conformance tests.
+# qlever-control integration
 
-Code from the conformance tool https://github.com/ad-freiburg/sparql-conformance 
-was copied in the directory.
+This directory is the `sparql_conformance` package: the same conformance-test harness as the [repository root](../../README.md), wired into the [qlever-control](https://github.com/ad-freiburg/qlever-control) CLI so it can be run as `sparql_conformance <command>` against QLever and six other engines out of the box, without writing an `EngineManager` yourself.
 
-Branch is based on https://github.com/qlever-dev/qlever-control/pull/190.
+It requires qlever-control to be installed (`pip install qlever`); the `sparql_conformance` console script comes from qlever-control's own packaging.
 
-Only code under ./engines/ interacts with commands from other engines.
+## Quickstart
 
-In ./commands are commands that can be executed using `sparql_conformance <command> -h`.
+Each engine run lives in its own directory (it holds that engine's `Qleverfile` and downloaded test suite):
 
-
-If the code for sparql conformance should live inside qlever-control, 
-then logic for engine commands should be seperated from the commands executed 
-in the cli by the user.
-This would allow the CLI commands and the sparql conformance tool to use the
-engine specific commands as they need it.
-
-## Usage
 ```bash
-# Quick execution for qlever
-mkdir qlever
-sparql_conformance setup qlever
-sparql_conformance test 
+mkdir qlever && cd qlever
+sparql_conformance setup qlever      # writes a Qleverfile, downloads the W3C test suite
+sparql_conformance test              # runs it, writes ./results/qlever.json.bz2
+```
 
-# Same for jena, for each new QLeverfile we need a new directory
-mkdir jena
+Supported engine names for `setup`/`--engine`: `qlever`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`.
+
+## Commands
+
+### `setup <engine>`
+
+Writes a pre-configured `Qleverfile` for the given engine into the current directory and downloads the W3C test suite (sparse checkout of `sparql/sparql11` and `sparql/sparql10` from [w3c/rdf-tests](https://github.com/w3c/rdf-tests)) into `./testsuite-files`. Run once per engine directory.
+
+```bash
+mkdir jena && cd jena
 sparql_conformance setup jena
-sparql_conformance test
+```
 
-# Example only testing one test group: aggregates
-mkdir qlever
-sparql_conformance setup qlever
+### `test`
+
+Runs the configured test suites against the engine and writes one result file.
+
+```bash
+sparql_conformance test
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--engine` | from Qleverfile | Engine type: `qlever`, `qlever-binaries`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso` |
+| `--name` | from Qleverfile | Run name; output is written to `<results-dir>/<name>.json.bz2` |
+| `--port` | from Qleverfile | Port the engine server listens on |
+| `--graph-store` | from Qleverfile | Graph store endpoint path for graph store protocol tests |
+| `--sparql11-dir` | `./testsuite-files/sparql/sparql11/` | Path to the SPARQL 1.1 test suite directory |
+| `--sparql10-dir` | `./testsuite-files/sparql/sparql10/` | Path to the SPARQL 1.0 test suite directory |
+| `--custom` | — | JSON object mapping extra suite names to directories, e.g. `'{"my-suite": "/path/to/dir"}'` |
+| `--type-alias` | from Qleverfile | JSON list of XSD type pairs treated as equivalent deviations, e.g. `"[['http://.../integer','http://.../int']]"` |
+| `--exclude` | — | Comma-separated test/group names to skip |
+| `--include` | — | Comma-separated test/group names to run (all others skipped) |
+| `--binaries-directory` | — | Path to `qlever-index`/`qlever-server` binaries (native `qlever`/`qlever-binaries` engine only) |
+| `--results-dir` | `./results` | Directory for the output JSON file |
+| `--report` | `none` | Console verbosity: `none`, `summary`, or `line` (see below) |
+| `--compare-to` | — | Path to a previous `<name>.json.bz2` run to diff against |
+
+Examples:
+
+```bash
+# Only run the aggregates group
 sparql_conformance test --include aggregates
 
-# Readable console output while running (default is quiet, only the JSON is written):
-#   --report summary  -> end-of-run totals + list of failed tests
-#   --report line     -> live PASS/FAIL line per test, plus the summary
+# Readable console output while running
 sparql_conformance test --report line
 
-# Compare this run against a previous result file; prints regressions
-# (newly failing) and fixes (newly passing). Can be combined with --report.
+# Compare this run against a previous one; prints regressions and fixes
 sparql_conformance test --compare-to results/old-run.json.bz2
+```
 
-# Example inspecting the engine state after loading test data:
-mkdir qlever
-sparql_conformance setup qlever
-sparql_conformance analyze "COUNT 1"
+### `analyze <test-name> [<test-name> ...]`
 
-# To visualize result files
+Starts the engine with the given test's data loaded, then blocks so you can send it queries by hand (e.g. via `curl` or the engine's own UI) to debug a failure. Press Ctrl-C or answer the prompt to shut it down.
+
+```bash
+sparql_conformance analyze "COUNT 1" "COUNT 2"
+```
+
+Takes the same `--engine`, `--sparql11-dir`/`--sparql10-dir`/`--custom`, `--type-alias`, `--exclude`, `--binaries-directory` arguments as `test` (see above); `--include` is not needed since the test names are given as positional arguments.
+
+### `visualize`
+
+Starts the [sparql-conformance-ui](https://github.com/SIRDNARch/sparql-conformance-ui) web viewer via docker/podman compose, serving the result files in the current directory.
+
+```bash
 sparql_conformance visualize
 ```
 
-## How to add a new engine
-When a new engine is being added to qlever-control it does not automatically work
-with sparql_conformance commands. For that an `EngineManager` who calls the newly implemented commands
-is needed.
+| Argument | Default | Description |
+|---|---|---|
+| `--port` | `3000` | Port to serve the UI on |
+| `--result-directory` | current directory | Directory containing `*.json.bz2` result files to display |
+| `--ui-branch` | `main` | Branch of `sparql-conformance-ui` to build |
+
+Then open `http://localhost:3000`.
+
+## Console output
+
+By default a run only writes the result file; `--report` adds terminal feedback:
+
+| `--report` | What it prints |
+|---|---|
+| `none` (default) | Nothing extra. |
+| `summary` | End-of-run totals (passed / failed / intended / not tested) plus a list of failed tests. |
+| `line` | A live colored `PASS`/`FAIL`/`INTD` line per test, plus the summary. |
+
+## Adding a new engine
+
+Adding an engine to `sparql_conformance` needs two things:
+
+1. The engine must already be a qlever-control target (its own `q<engine>` CLI, e.g. `qjena`).
+2. An `EngineManager` subclass under [`engines/`](engines/) that calls that CLI's commands (see [`engines/README.md`](engines/README.md) for the adapter contract) — for example [`engines/qlever.py`](engines/qlever.py) drives `qlever`'s `index`/`start`/`stop`/`query` commands.
+
+Then register it in the `_MANAGERS` map in [`engines/__init__.py`](engines/__init__.py) and add a `Qleverfile.<engine>` under [`Qleverfiles/`](Qleverfiles/) for `setup` to install.

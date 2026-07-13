@@ -1,12 +1,15 @@
 # Writing a custom EngineManager
 
-An `EngineManager` is the adapter between this test harness and a SPARQL engine. Its a single Python file that you pass to `--engine`. The harness dynamically loads the first `EngineManager` subclass it finds in that file.
+An `EngineManager` is the adapter between this test harness and a SPARQL engine. It's a single Python file that you pass to `--engine`. The harness dynamically loads the first `EngineManager` subclass it finds in that file — no registration needed.
 
 ## Quickstart
 
 1. Copy the skeleton below into a new file, e.g. `my-engine-manager.py`.
-2. Implement the five abstract methods.
-3. Run: `python3 main.py --engine ./my-engine-manager.py --name myrun --sparql11-dir ...`
+2. Implement the five abstract methods (`setup`, `cleanup`, `query`, `update`, `protocol_endpoint`).
+3. Run:
+   ```bash
+   sparql-conformance --engine ./my-engine-manager.py --name myrun --sparql11-dir /path/to/rdf-tests/sparql/sparql11
+   ```
 
 ## Skeleton
 
@@ -16,8 +19,8 @@ import requests
 import time
 from typing import Tuple, Optional
 
-from src.config import Config
-from src.engines.engine_manager import EngineManager
+from sparql_conformance.config import Config
+from sparql_conformance.engines.engine_manager import EngineManager
 
 
 class MyEngineManager(EngineManager):
@@ -104,6 +107,15 @@ graph_paths = (
 
 File formats you may receive: `.ttl`, `.nt`, `.nq`, `.trig`, `.rdf` (RDF/XML).
 
+## A working example
+
+[`rdflib_manager.py`](rdflib_manager.py) is a minimal, complete `EngineManager` that runs queries in-process via [rdflib](https://rdflib.readthedocs.io/) — no server, no docker. It only supports query/format/update/syntax tests (no protocol or graph-store-protocol, since those need a real HTTP server), but it is the smallest working reference for the four required methods. Try it out:
+
+```bash
+sparql-conformance --engine src/sparql_conformance/engines/rdflib_manager.py \
+  --name rdflib-demo --sparql11-dir /path/to/rdf-tests/sparql/sparql11 --report summary
+```
+
 ## Optional overrides
 
 These methods have working defaults but can be overridden when needed.
@@ -179,6 +191,17 @@ def reset_graphs(
 ```
 
 Returning `False` causes the harness to mark all remaining tests in the group as FAILED with a server error.
+
+### `supported_graphstore_features() -> Set[str]`
+
+Graph Store Protocol tests can declare requirements via `mf:requires` (e.g. needing the graph store to support direct or indirect graph identification, or graph creation via `POST`). Return the subset your engine supports; a test requiring an unsupported feature is skipped (reported as an intended deviation) instead of run and failed. Default assumes full support:
+
+```python
+from sparql_conformance.engines.engine_manager import ALL_GRAPHSTORE_FEATURES
+
+def supported_graphstore_features(self) -> set:
+    return ALL_GRAPHSTORE_FEATURES - {"POSTGraphCreation"}
+```
 
 ### `activate_syntax_test_mode(config: Config)`
 

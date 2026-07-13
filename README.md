@@ -1,8 +1,35 @@
 # sparql-conformance
 
-A standalone tool for running the [W3C SPARQL conformance test suite](https://github.com/w3c/rdf-tests/tree/main/sparql/) against any SPARQL engine. The engine under test is provided as a small Python file — no framework dependency required.
+A test harness that runs the [W3C SPARQL conformance test suite](https://github.com/w3c/rdf-tests/tree/main/sparql/) against any SPARQL engine and reports which tests pass, fail, or fail in an "intended" (accepted) way. It checks query evaluation, updates, syntax validation, the SPARQL protocol, and the graph store protocol, and writes a machine-readable result file plus optional console output.
 
-Originally developed for [QLever](https://github.com/ad-freiburg/qlever); now engine-agnostic.
+The engine under test is plugged in as a small adapter class (an `EngineManager`) — no framework dependency required, so it works with any engine you can start and query over HTTP. Originally developed for [QLever](https://github.com/ad-freiburg/qlever); now engine-agnostic.
+
+There are two ways to use it:
+
+- **Standalone** (this document): bring your own engine adapter, or use the bundled in-process rdflib reference engine.
+- **[qlever-control integration](src/sparql_conformance/README.md)**: run `sparql_conformance test` with built-in support for QLever, Blazegraph, GraphDB, Jena, MillenniumDB, Oxigraph, and Virtuoso — no adapter needed.
+
+## Get started
+
+```bash
+git clone https://github.com/ad-freiburg/sparql-conformance.git
+cd sparql-conformance
+pip install -e .
+
+git clone https://github.com/w3c/rdf-tests.git ../rdf-tests
+```
+
+Try it against the bundled in-process rdflib engine — no server or engine installation needed:
+
+```bash
+sparql-conformance \
+  --engine src/sparql_conformance/engines/rdflib_manager.py \
+  --name rdflib-demo \
+  --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --report summary
+```
+
+This writes `results/rdflib-demo.json.bz2` and prints a pass/fail summary. To test your own engine instead, write an `EngineManager` for it — see [Adding support for a new engine](#adding-support-for-a-new-engine) — and pass its file to `--engine`.
 
 ## Installation
 
@@ -10,50 +37,41 @@ Originally developed for [QLever](https://github.com/ad-freiburg/qlever); now en
 pip install -e .
 ```
 
-This installs the `sparql_conformance` package and the `sparql-conformance`
-console script. The built-in engine managers (`qlever`, `blazegraph`,
-`graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`) and the
-`sparql_conformance` CLI integration additionally require
-[qlever-control](https://github.com/ad-freiburg/qlever-control); without it,
-provide your own engine via `--engine <file>`.
+This installs the `sparql_conformance` package and the `sparql-conformance` console script (`python3 main.py ...` also still works without installing). The built-in engine managers (`qlever`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`) and the `sparql_conformance <command>` CLI additionally require [qlever-control](https://github.com/ad-freiburg/qlever-control) — see the [integration doc](src/sparql_conformance/README.md). Without qlever-control, provide your own engine via `--engine <file>`.
 
-## Prerequisites
+**Prerequisites:** Python 3.9+, and the W3C test suite files (`git clone https://github.com/w3c/rdf-tests.git`).
 
-- Python 3.9+
-- The W3C test suite files — clone or download:
-  ```
-  git clone https://github.com/w3c/rdf-tests.git
-  ```
-- A compiled SPARQL engine to test
+## Usage
 
-## Running the test suite
-
-```
+```bash
 sparql-conformance \
   --engine <engine-file-or-type> \
   --name <run-name> \
   --sparql11-dir <path/to/sparql11>
 ```
 
-(`python3 main.py ...` still works without installation.)
+At least one of `--sparql11-dir`, `--sparql10-dir`, `--custom` is required.
 
 ### Arguments
 
 | Argument | Required | Default | Description |
 |---|---|---|---|
-| `--engine` | yes | — | Path to a Python file containing an `EngineManager` subclass (see [src/sparql_conformance/engines/README.md](src/sparql_conformance/engines/README.md)) |
-| `--name` | yes | — | Label for this run; output is written to `results/<name>.json.bz2` |
+| `--engine` | yes | — | Path to a Python file containing an `EngineManager` subclass, or a named engine type if [qlever-control](https://github.com/ad-freiburg/qlever-control) is installed. See [Adding support for a new engine](#adding-support-for-a-new-engine). |
+| `--name` | yes | — | Label for this run; output is written to `<results-dir>/<name>.json.bz2` |
 | `--sparql11-dir` | one of the three | — | Path to the SPARQL 1.1 test suite directory |
 | `--sparql10-dir` | one of the three | — | Path to the SPARQL 1.0 test suite directory |
-| `--custom-dir` | one of the three | — | Path to a custom test suite directory |
+| `--custom` | one of the three | — | JSON object mapping extra suite names to directories. Example: `--custom '{"my-suite": "/path/to/dir"}'` |
+| `--results-dir` | no | `./results` | Directory for the output JSON file |
 | `--port` | no | `7001` | Port the engine server listens on |
 | `--graph-store` | no | `sparql` | Graph store endpoint path for graph store protocol tests |
-| `--binaries-directory` | no | `` | Directory containing engine binaries (forwarded to the engine manager via `config.path_to_binaries`) |
+| `--binaries-directory` | no | `""` | Directory containing engine binaries (forwarded to the engine manager via `config.path_to_binaries`) |
+| `--server-binary` | no | `qlever-server` | Server binary name (used by the bundled QLever-binaries engine manager) |
+| `--index-binary` | no | `qlever-index` | Index-builder binary name (used by the bundled QLever-binaries engine manager) |
 | `--exclude` | no | — | Comma-separated list of test names or group names to skip |
 | `--include` | no | — | Comma-separated list of test names or group names to run (all others skipped) |
-| `--type-alias` | no | — | JSON list of XSD type pairs treated as equivalent. See below. |
+| `--type-alias` | no | — | JSON list of XSD type pairs treated as equivalent. See [Type aliases](#type-aliases). |
 | `--report` | no | `none` | Console output verbosity: `none`, `summary`, or `line`. See [Console output](#console-output). |
-| `--compare-to` | no | — | Path to a previous `<name>.json.bz2` run to compare against; prints regressions and fixes. See [Console output](#console-output). |
+| `--compare-to` | no | — | Path to a previous `<name>.json.bz2` run to compare against; prints regressions and fixes. See [Comparing against a previous run](#comparing-against-a-previous-run). |
 
 ### Example: QLever
 
@@ -71,40 +89,44 @@ sparql-conformance \
 Some engines return a numerically equivalent but differently typed literal (e.g. `xsd:int` instead of `xsd:integer`). Use `--type-alias` to mark these as intended deviations rather than failures:
 
 ```bash
---type-alias "[['xsd:integer','xsd:int'],['xsd:double','xsd:float']]"
+sparql-conformance --engine ... --name my-run --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --type-alias "[['http://www.w3.org/2001/XMLSchema#integer', 'http://www.w3.org/2001/XMLSchema#int']]"
 ```
 
 ### Filtering tests
 
-Run a single group or test by name:
+Run or skip a single test or group by name:
 
 ```bash
 # Run only the property path group
---include pp01,pp02,pp06
+sparql-conformance --engine ... --name my-run --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --include pp01,pp02,pp06
 
-# Skip aggregates
---exclude aggregates
+# Skip the aggregates group
+sparql-conformance --engine ... --name my-run --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --exclude aggregates
 ```
 
 ## Output
 
-Results are written to `results/<name>.json.bz2`. The file contains a JSON object with one entry per test suite and a summary:
+Results are written to `<results-dir>/<name>.json.bz2` — a bzip2-compressed JSON file with one entry per test suite and a summary:
 
 ```json
 {
   "version": 2,
   "suites": {
-    "sparql11": { "tests": [...], "info": { "passed": 512, "failed": 34, ... } },
-    "sparql10": { "tests": [...], "info": { ... } }
+    "sparql11": { "tests": { "...": { "name": "...", "status": "Passed", "...": "..." } }, "info": { "passed": 512, "failed": 34, "...": "..." } },
+    "sparql10": { "tests": { "...": "..." }, "info": { "...": "..." } }
   },
-  "info": { "passed": 560, "tests": 620, "failed": 38, ... }
+  "info": { "passed": 560, "tests": 620, "failed": 38, "passedFailed": 20, "notTested": 2 }
 }
 ```
 
+Each test entry also carries HTML-formatted diffs (`expectedHtml`, `gotHtml`) meant for a viewer such as [sparql-conformance-ui](https://github.com/SIRDNARch/sparql-conformance-ui).
+
 ## Console output
 
-By default the run only prints progress and writes the JSON file. For readable
-feedback in the terminal, use `--report`:
+By default a run only prints progress and writes the JSON file. For readable feedback in the terminal, use `--report`:
 
 | `--report` | What it prints |
 |---|---|
@@ -113,21 +135,18 @@ feedback in the terminal, use `--report`:
 | `line` | A live colored `PASS` / `FAIL` / `INTD` line per test as it runs, plus the summary. |
 
 ```bash
-python3 main.py --engine <engine-file> --name my-run \
+sparql-conformance --engine <engine-file> --name my-run \
   --sparql11-dir ../rdf-tests/sparql/sparql11 --report line
 ```
 
-Colors are only used when writing to a terminal; piping to a file (or setting
-`NO_COLOR`) produces plain text.
+Colors are only used when writing to a terminal; piping to a file (or setting `NO_COLOR`) produces plain text.
 
 ### Comparing against a previous run
 
-Pass a previous result file to `--compare-to` to see what changed. It prints the
-**regressions** (tests that passed before and now fail) and **fixes** (tests that
-failed before and now pass):
+Pass a previous result file to `--compare-to` to see what changed. It prints the **regressions** (tests that passed before and now fail) and **fixes** (tests that failed before and now pass):
 
 ```bash
-python3 main.py --engine <engine-file> --name new-run \
+sparql-conformance --engine <engine-file> --name new-run \
   --sparql11-dir ../rdf-tests/sparql/sparql11 \
   --compare-to results/old-run.json.bz2
 ```
@@ -136,4 +155,15 @@ python3 main.py --engine <engine-file> --name new-run \
 
 ## Adding support for a new engine
 
-See [src/sparql_conformance/engines/README.md](src/sparql_conformance/engines/README.md) for a step-by-step guide to writing an `EngineManager` for any SPARQL engine.
+See [`src/sparql_conformance/engines/README.md`](src/sparql_conformance/engines/README.md) for a step-by-step guide to writing an `EngineManager` for any SPARQL engine, including a minimal working example ([`rdflib_manager.py`](src/sparql_conformance/engines/rdflib_manager.py)).
+
+## Running the framework's own tests
+
+```bash
+pip install -e .[dev]
+pytest
+```
+
+## qlever-control integration
+
+For built-in support of seven engines with no adapter to write, plus `setup`/`analyze`/`visualize` commands, see [`src/sparql_conformance/README.md`](src/sparql_conformance/README.md).
