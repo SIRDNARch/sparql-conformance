@@ -1,13 +1,13 @@
 from enum import Enum
 from typing import Optional, List, Union, Dict, Any, TYPE_CHECKING
 
-from src.config import Config
-from src.util import local_name, read_file, escape
+from sparql_conformance.config import Config
+from sparql_conformance.util import local_name, read_file, escape
 import os
 import json
 
 if TYPE_CHECKING:
-    from src.protocol_request import ProtocolRequest
+    from sparql_conformance.protocol_request import ProtocolRequest
 
 class Status(str, Enum):
     PASSED = "Passed"
@@ -44,12 +44,12 @@ class ErrorMessage(str, Enum):
             cls.NOT_SUPPORTED,
             cls.UNDEFINED_ERROR,
             cls.CONTENT_TYPE_NOT_SUPPORTED,
-            cls.PARSE_ERROR,
-            cls.TYPE_ERROR,
             cls.ENGINE_INTERNAL_ERROR,
             cls.HTTP_NOT_FOUND,
-            cls.UNDEFINED_FUNCTION,
+            cls.PARSE_ERROR,
+            cls.TYPE_ERROR,
             cls.FUNCTION_ARGUMENT_ERROR,
+            cls.UNDEFINED_FUNCTION,
         ]
 
 def process_graph_data(graph_data: Union[None, str, Dict, List], target_dict: Dict[str, str]) -> None:

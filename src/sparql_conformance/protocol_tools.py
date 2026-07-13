@@ -5,10 +5,10 @@ import time
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
-from src.engines.engine_manager import EngineManager
-from src.protocol_request import ProtocolRequest
-from src.test_object import TestObject, Status, ErrorMessage
-from src.rdf_tools import compare_ttl
+from sparql_conformance.engines.engine_manager import EngineManager
+from sparql_conformance.protocol_request import ProtocolRequest
+from sparql_conformance.test_object import TestObject, Status, ErrorMessage
+from sparql_conformance.rdf_tools import compare_ttl
 
 
 def prepare_request(engine_manager: EngineManager, test: TestObject, request_with_reponse: str, newpath: str) -> Tuple[str, str]:
@@ -152,143 +152,6 @@ def prepare_graphstore_request_from_action(
     header_lines.append(f'Content-Length: {content_length}')
 
     return '\r\n'.join(header_lines) + '\r\n\r\n', request_body
-
-
-def parse_raw_http_response(response: str) -> dict:
-    separator = '\r\n\r\n'
-    if separator in response:
-        header_text, body = response.split(separator, 1)
-    elif '\n\n' in response:
-        header_text, body = response.split('\n\n', 1)
-    else:
-        header_text, body = response, ''
-
-    lines = header_text.splitlines()
-    status_code: Optional[str] = None
-    if lines:
-        match = re.match(r'HTTP/\S+\s+(\d{3})', lines[0])
-        if match:
-            status_code = match.group(1)
-
-    headers: Dict[str, List[str]] = {}
-    for line in lines[1:]:
-        if ':' not in line:
-            continue
-        name, value = line.split(':', 1)
-        headers.setdefault(name.strip().lower(), []).append(value.strip())
-
-    if any('chunked' in value.lower()
-           for value in headers.get('transfer-encoding', [])):
-        try:
-            body = parse_chunked_body(body)
-        except ValueError:
-            pass
-
-    return {
-        'status_code': status_code,
-        'headers': headers,
-        'body': body,
-    }
-
-
-def _status_code_matches(expected: str, actual: Optional[str]) -> bool:
-    if actual is None:
-        return False
-    if len(expected) != len(actual):
-        return False
-    return all(e == 'x' or e == a for e, a in zip(expected, actual))
-
-
-def _media_type(value: str) -> str:
-    return value.split(';', 1)[0].strip().lower()
-
-
-def _response_header_matches(
-        expected_name: str,
-        expected_value: str,
-        actual_headers: Dict[str, List[str]]) -> bool:
-    values = actual_headers.get(expected_name.lower(), [])
-    if expected_name.lower() == 'content-type':
-        expected_media_type = _media_type(expected_value)
-        return any(_media_type(value) == expected_media_type for value in values)
-    return any(value.strip() == expected_value.strip() for value in values)
-
-
-def _collect_mismatches(
-        all_mismatches: List[str],
-        mismatches: List[str],
-        request_index: int,
-        multiple_requests: bool) -> None:
-    """Append per-request mismatch reasons, prefixing when more than one request."""
-    prefix = f"Request {request_index + 1}: " if multiple_requests else ''
-    all_mismatches.extend(prefix + reason for reason in mismatches)
-
-
-def prepare_graphstore_response_from_action(req: ProtocolRequest) -> dict:
-    return {
-        'status_codes': list(req.expected_response.status_codes),
-        'headers': [
-            {'name': h.name, 'value': h.value}
-            for h in req.expected_response.headers
-        ],
-        'body': req.expected_response.body,
-        'expected_location': req.expected_response.expected_location,
-    }
-
-
-def compare_graphstore_response(
-        req: ProtocolRequest,
-        got_response: str) -> Tuple[bool, str, List[str]]:
-    parsed_response = parse_raw_http_response(got_response)
-    expected_response = req.expected_response
-    mismatches: List[str] = []
-
-    status_code_match = (
-        not expected_response.status_codes
-        or any(
-            _status_code_matches(status_code, parsed_response['status_code'])
-            for status_code in expected_response.status_codes
-        )
-    )
-    if not status_code_match:
-        mismatches.append(
-            f"status_code: expected one of "
-            f"{list(expected_response.status_codes)}, "
-            f"got {parsed_response['status_code']!r}")
-
-    headers_match = True
-    for header in expected_response.headers:
-        if not _response_header_matches(
-                header.name,
-                header.value,
-                parsed_response['headers']):
-            headers_match = False
-            mismatches.append(
-                f"header {header.name!r}: expected {header.value!r}, "
-                f"got {parsed_response['headers'].get(header.name.lower(), [])}")
-
-    location = ''
-    expected_location = expected_response.expected_location
-    location_match = True
-    if expected_location is not None:
-        location_values = parsed_response['headers'].get('location', [])
-        location_match = bool(location_values)
-        if location_values:
-            location = location_values[0]
-        else:
-            mismatches.append("location header: expected present, got none")
-
-    body_match = True
-    if expected_response.body is not None:
-        status, error_type, expected_string, query_string, expected_string_red, query_string_red = compare_ttl(
-            expected_response.body,
-            parsed_response['body'])
-        body_match = status == Status.PASSED
-        if not body_match:
-            mismatches.append("body: TTL does not match expected")
-
-    matching = status_code_match and headers_match and location_match and body_match
-    return matching, location, mismatches
 
 
 def prepare_response(test: TestObject, request_with_reponse: str, newpath: str) -> dict[str, str | list[str]]:
@@ -438,6 +301,143 @@ def parse_chunked_body(response_body: str) -> str:
         i += chunk_size + 2
 
     return ''.join(result)
+
+
+def parse_raw_http_response(response: str) -> dict:
+    separator = '\r\n\r\n'
+    if separator in response:
+        header_text, body = response.split(separator, 1)
+    elif '\n\n' in response:
+        header_text, body = response.split('\n\n', 1)
+    else:
+        header_text, body = response, ''
+
+    lines = header_text.splitlines()
+    status_code: Optional[str] = None
+    if lines:
+        match = re.match(r'HTTP/\S+\s+(\d{3})', lines[0])
+        if match:
+            status_code = match.group(1)
+
+    headers: Dict[str, List[str]] = {}
+    for line in lines[1:]:
+        if ':' not in line:
+            continue
+        name, value = line.split(':', 1)
+        headers.setdefault(name.strip().lower(), []).append(value.strip())
+
+    if any('chunked' in value.lower()
+           for value in headers.get('transfer-encoding', [])):
+        try:
+            body = parse_chunked_body(body)
+        except ValueError:
+            pass
+
+    return {
+        'status_code': status_code,
+        'headers': headers,
+        'body': body,
+    }
+
+
+def _status_code_matches(expected: str, actual: Optional[str]) -> bool:
+    if actual is None:
+        return False
+    if len(expected) != len(actual):
+        return False
+    return all(e == 'x' or e == a for e, a in zip(expected, actual))
+
+
+def _media_type(value: str) -> str:
+    return value.split(';', 1)[0].strip().lower()
+
+
+def _response_header_matches(
+        expected_name: str,
+        expected_value: str,
+        actual_headers: Dict[str, List[str]]) -> bool:
+    values = actual_headers.get(expected_name.lower(), [])
+    if expected_name.lower() == 'content-type':
+        expected_media_type = _media_type(expected_value)
+        return any(_media_type(value) == expected_media_type for value in values)
+    return any(value.strip() == expected_value.strip() for value in values)
+
+
+def _collect_mismatches(
+        all_mismatches: List[str],
+        mismatches: List[str],
+        request_index: int,
+        multiple_requests: bool) -> None:
+    """Append per-request mismatch reasons, prefixing when more than one request."""
+    prefix = f"Request {request_index + 1}: " if multiple_requests else ''
+    all_mismatches.extend(prefix + reason for reason in mismatches)
+
+
+def prepare_graphstore_response_from_action(req: ProtocolRequest) -> dict:
+    return {
+        'status_codes': list(req.expected_response.status_codes),
+        'headers': [
+            {'name': h.name, 'value': h.value}
+            for h in req.expected_response.headers
+        ],
+        'body': req.expected_response.body,
+        'expected_location': req.expected_response.expected_location,
+    }
+
+
+def compare_graphstore_response(
+        req: ProtocolRequest,
+        got_response: str) -> Tuple[bool, str, List[str]]:
+    parsed_response = parse_raw_http_response(got_response)
+    expected_response = req.expected_response
+    mismatches: List[str] = []
+
+    status_code_match = (
+        not expected_response.status_codes
+        or any(
+            _status_code_matches(status_code, parsed_response['status_code'])
+            for status_code in expected_response.status_codes
+        )
+    )
+    if not status_code_match:
+        mismatches.append(
+            f"status_code: expected one of "
+            f"{list(expected_response.status_codes)}, "
+            f"got {parsed_response['status_code']!r}")
+
+    headers_match = True
+    for header in expected_response.headers:
+        if not _response_header_matches(
+                header.name,
+                header.value,
+                parsed_response['headers']):
+            headers_match = False
+            mismatches.append(
+                f"header {header.name!r}: expected {header.value!r}, "
+                f"got {parsed_response['headers'].get(header.name.lower(), [])}")
+
+    location = ''
+    expected_location = expected_response.expected_location
+    location_match = True
+    if expected_location is not None:
+        location_values = parsed_response['headers'].get('location', [])
+        location_match = bool(location_values)
+        if location_values:
+            location = location_values[0]
+        else:
+            mismatches.append("location header: expected present, got none")
+
+    body_match = True
+    if expected_response.body is not None:
+        status, error_type, expected_string, query_string, expected_string_red, query_string_red = compare_ttl(
+            expected_response.body,
+            parsed_response['body'])
+        body_match = status == Status.PASSED
+        if not body_match:
+            mismatches.append("body: TTL does not match expected")
+
+    matching = status_code_match and headers_match and location_match and body_match
+    return matching, location, mismatches
 
 
 def compare_response(expected_response: dict[str, str | list[str]], got_response: str, is_select: bool) -> Tuple[bool, str, List[str]]:

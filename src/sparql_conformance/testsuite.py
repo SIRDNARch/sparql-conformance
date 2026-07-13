@@ -7,31 +7,33 @@ from typing import List, Dict, Tuple
 
 import rdflib
 
-import src.util as util
-from src import console_report
+import sparql_conformance.util as util
+from sparql_conformance import console_report
 try:
     from qlever.log import log
 except ImportError:
     import logging
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     log = logging.getLogger(__name__)
-from src.config import Config
+from sparql_conformance.config import Config
+# The concrete engine managers depend on qlever-control (qlever, qgraphdb,
+# ...); the core must stay importable without it.
 try:
-    from src.engines.graphdb_manager import GraphdbManager
+    from sparql_conformance.engines.graphdb_manager import GraphdbManager
 except ImportError:
     GraphdbManager = None
-from src.engines.engine_manager import EngineManager
-from src.mock_sparql_server import MockSPARQLServer
-from src.json_tools import compare_json
-from src.protocol_tools import (
+from sparql_conformance.engines.engine_manager import EngineManager
+from sparql_conformance.mock_sparql_server import MockSPARQLServer
+from sparql_conformance.json_tools import compare_json
+from sparql_conformance.protocol_tools import (
     run_graphstore_protocol_test_from_action,
     run_protocol_test,
     run_protocol_test_from_action,
 )
-from src.rdf_tools import compare_ttl
-from src.test_object import TestObject, Status, ErrorMessage
-from src.tsv_csv_tools import compare_sv
-from src.xml_tools import compare_xml
+from sparql_conformance.rdf_tools import compare_ttl
+from sparql_conformance.test_object import TestObject, Status, ErrorMessage
+from sparql_conformance.tsv_csv_tools import compare_sv
+from sparql_conformance.xml_tools import compare_xml
 
 
 def _augment_with_protocol_data(
@@ -263,8 +265,15 @@ class TestSuite:
             self.update_graph_status(list_of_tests, Status.FAILED, ErrorMessage.SERVER_ERROR)
         if index_success and server_success and "Syntax" in list_of_tests[0].type_name:
             self.engine_manager.activate_syntax_test_mode(self.config.server_address, self.config.port)
-        self.log_for_all_tests(list_of_tests, "index_log", index_log)
-        self.log_for_all_tests(list_of_tests, "server_log", server_log)
+        # Cap the logs before copying them onto every test: a verbose engine
+        # (e.g. GraphDB's ~1.9 MB DEBUG index log) would otherwise bloat the
+        # result to gigabytes and exceed the visualize API's max string size.
+        self.log_for_all_tests(
+            list_of_tests, "index_log", util.truncate_log(index_log)
+        )
+        self.log_for_all_tests(
+            list_of_tests, "server_log", util.truncate_log(server_log)
+        )
         return index_success and server_success
 
     def process_failed_response(self, test, query_response: tuple):
@@ -454,7 +463,7 @@ class TestSuite:
         """
         for graph_path in graphs_list_of_tests:
             log.info(f"Running protocol tests for graph: {graph_path}")
-            # Work around for issue #25: add standard W3C protocol test data files.
+            # Work around for issue #25: add standard protocol test data files
             graph_paths = _augment_with_protocol_data(graph_path)
             if not self.prepare_test_environment(
                     graph_paths, graphs_list_of_tests[graph_path]):

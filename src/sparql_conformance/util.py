@@ -13,7 +13,7 @@ except ImportError:
     import logging
     log = logging.getLogger(__name__)
     get_container_image_id = None
-from src.config import Config
+from sparql_conformance.config import Config
 
 
 def make_args(config: Config, **overrides):
@@ -53,6 +53,10 @@ def make_args(config: Config, **overrides):
         kill_existing_with_same_port=False,
         no_warmup=True,
         run_in_foreground=False,
+        # Container restart policy for the server (qlever start wraps the
+        # command with `run --restart=<policy>`).
+        restart_policy="unless-stopped",
+        preload_materialized_views=None,
         # INDEX.
         index_container=f"{config.run_id}-index-container",
         cat_input_files=None,
@@ -70,6 +74,10 @@ def make_args(config: Config, **overrides):
         add_has_word_triples=False,
         runtime_parameters=False,
         extend_existing_index=False,
+        materialized_views=None,
+        # Container image rebuild flag used by engines that build their image
+        # from a Dockerfile/repo (qjena, qmdb, qblazegraph index commands).
+        rebuild_image=False,
     )
     return Namespace(**{**base, **overrides})
 
@@ -155,6 +163,31 @@ def remove_date_time_parts(index_log: str) -> str:
     """
     pattern = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\s*-"
     return re.sub(pattern, "", index_log)
+
+
+# Max characters of a captured log (index/server) stored per test. Logs are
+# copied onto every test of a run, so a verbose engine (e.g. GraphDB emits
+# ~1.9 MB of DEBUG output) can otherwise bloat a result to gigabytes and
+# exceed the visualize API's max string size on import. Keep head + tail so
+# both the setup and any trailing error remain visible.
+MAX_STORED_LOG_CHARS = 16384
+
+
+def truncate_log(log_message: str, limit: int = MAX_STORED_LOG_CHARS) -> str:
+    """
+    Truncate an over-long log to `limit` characters, keeping the start and the
+    end (where errors usually are) with a marker for the removed middle.
+    """
+    if not log_message or len(log_message) <= limit:
+        return log_message
+    head = limit // 4
+    tail = limit - head
+    removed = len(log_message) - limit
+    return (
+        f"{log_message[:head]}\n"
+        f"... [{removed} characters truncated] ...\n"
+        f"{log_message[-tail:]}"
+    )
 
 
 def copy_graph_to_workdir(file_path: str, workdir: str) -> str:

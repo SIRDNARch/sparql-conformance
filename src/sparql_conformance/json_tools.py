@@ -1,7 +1,7 @@
 import json
 from typing import List, Tuple
 
-from src.test_object import Status, ErrorMessage
+from sparql_conformance.test_object import Status, ErrorMessage
 
 
 def handle_bindings(

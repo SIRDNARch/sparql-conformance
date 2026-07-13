@@ -4,10 +4,22 @@ A standalone tool for running the [W3C SPARQL conformance test suite](https://gi
 
 Originally developed for [QLever](https://github.com/ad-freiburg/qlever); now engine-agnostic.
 
+## Installation
+
+```bash
+pip install -e .
+```
+
+This installs the `sparql_conformance` package and the `sparql-conformance`
+console script. The built-in engine managers (`qlever`, `blazegraph`,
+`graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`) and the
+`sparql_conformance` CLI integration additionally require
+[qlever-control](https://github.com/ad-freiburg/qlever-control); without it,
+provide your own engine via `--engine <file>`.
+
 ## Prerequisites
 
-- Python 3.10+
-- Dependencies: `rdflib`, `requests` (install via `pip install rdflib requests`)
+- Python 3.9+
 - The W3C test suite files — clone or download:
   ```
   git clone https://github.com/w3c/rdf-tests.git
@@ -17,17 +29,19 @@ Originally developed for [QLever](https://github.com/ad-freiburg/qlever); now en
 ## Running the test suite
 
 ```
-python3 main.py \
-  --engine <engine-file> \
+sparql-conformance \
+  --engine <engine-file-or-type> \
   --name <run-name> \
   --sparql11-dir <path/to/sparql11>
 ```
+
+(`python3 main.py ...` still works without installation.)
 
 ### Arguments
 
 | Argument | Required | Default | Description |
 |---|---|---|---|
-| `--engine` | yes | — | Path to a Python file containing an `EngineManager` subclass (see [src/engines/README.md](src/engines/README.md)) |
+| `--engine` | yes | — | Path to a Python file containing an `EngineManager` subclass (see [src/sparql_conformance/engines/README.md](src/sparql_conformance/engines/README.md)) |
 | `--name` | yes | — | Label for this run; output is written to `results/<name>.json.bz2` |
 | `--sparql11-dir` | one of the three | — | Path to the SPARQL 1.1 test suite directory |
 | `--sparql10-dir` | one of the three | — | Path to the SPARQL 1.0 test suite directory |
@@ -44,8 +58,8 @@ python3 main.py \
 ### Example: QLever
 
 ```bash
-python3 main.py \
-  --engine src/engines/qlever-binaries-manager.py \
+sparql-conformance \
+  --engine src/sparql_conformance/engines/qlever-binaries-manager.py \
   --name qlever-2024 \
   --sparql11-dir ../rdf-tests/sparql/sparql11 \
   --sparql10-dir ../rdf-tests/sparql/sparql10 \
@@ -122,4 +136,4 @@ python3 main.py --engine <engine-file> --name new-run \
 
 ## Adding support for a new engine
 
-See [src/engines/README.md](src/engines/README.md) for a step-by-step guide to writing an `EngineManager` for any SPARQL engine.
+See [src/sparql_conformance/engines/README.md](src/sparql_conformance/engines/README.md) for a step-by-step guide to writing an `EngineManager` for any SPARQL engine.

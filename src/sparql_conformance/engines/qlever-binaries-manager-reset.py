@@ -19,9 +19,9 @@ from typing import Tuple
 
 import requests
 
-from src.config import Config
-from src.rdf_tools import rdf_xml_to_turtle
-from src.util import read_file
+from sparql_conformance.config import Config
+from sparql_conformance.rdf_tools import rdf_xml_to_turtle
+from sparql_conformance.util import read_file
 
 # ---------------------------------------------------------------------------
 # Dynamically import QleverBinariesManager from the sibling file so this

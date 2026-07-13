@@ -1,9 +1,9 @@
 from typing import List, Tuple
 
-from src.util import escape, is_number
+from sparql_conformance.util import escape, is_number
 from io import StringIO
 import csv
-from src.test_object import Status, ErrorMessage
+from sparql_conformance.test_object import Status, ErrorMessage
 
 def _build_column_mapping(expected_header: list, actual_header: list):
     """

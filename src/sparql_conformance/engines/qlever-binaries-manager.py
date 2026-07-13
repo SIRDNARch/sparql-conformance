@@ -16,10 +16,10 @@ from typing import Tuple, Optional
 
 import requests
 
-from src.config import Config
-from src.engines.engine_manager import EngineManager
-from src.rdf_tools import rdf_xml_to_turtle, write_ttl_file, delete_ttl_file
-from src.util import get_accept_header, read_file, remove_date_time_parts
+from sparql_conformance.config import Config
+from sparql_conformance.engines.engine_manager import EngineManager
+from sparql_conformance.rdf_tools import rdf_xml_to_turtle, write_ttl_file, delete_ttl_file
+from sparql_conformance.util import get_accept_header, read_file, remove_date_time_parts
 
 _INDEX_NAME = "qlever-sparql-conformance"
 _SETTINGS_CONTENT = '{ "num-triples-per-batch": 1000000 }'

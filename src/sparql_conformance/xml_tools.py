@@ -3,8 +3,8 @@ import xml.etree.ElementTree as ET
 import xml.dom.minidom as md
 from typing import List, Tuple
 
-from src.test_object import Status, ErrorMessage
-from src.util import escape
+from sparql_conformance.test_object import Status, ErrorMessage
+from sparql_conformance.util import escape
 
 
 def replace_self_closing_tag(xml: str) -> str:

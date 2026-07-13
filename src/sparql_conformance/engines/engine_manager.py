@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Set, Tuple
 
-from src.config import Config
+from sparql_conformance.config import Config
 
 
 # Graph Store Protocol features a test may declare via mf:requires

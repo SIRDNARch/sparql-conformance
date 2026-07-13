@@ -16,10 +16,7 @@ import json
 import os
 import sys
 
-try:
-    from src.test_object import Status
-except ImportError:  # qlever-control integration uses a different package name
-    from sparql_conformance.test_object import Status
+from sparql_conformance.test_object import Status
 
 # ANSI escape codes.
 _RESET = "\033[0m"

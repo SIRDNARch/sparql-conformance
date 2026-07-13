@@ -1,8 +1,8 @@
 import rdflib
-from src.test_object import Status, ErrorMessage
+from sparql_conformance.test_object import Status, ErrorMessage
 import os
 import re
-from src.util import escape
+from sparql_conformance.util import escape
 
 
 def rdf_xml_to_turtle(file_path, public_id) -> str:
