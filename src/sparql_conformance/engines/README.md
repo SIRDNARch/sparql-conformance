@@ -180,6 +180,10 @@ def reset_graphs(
 
 Returning `False` causes the harness to mark all remaining tests in the group as FAILED with a server error.
 
-### `activate_syntax_test_mode(server_address: str, port: str)`
+### `activate_syntax_test_mode(config: Config)`
 
 Called before syntax tests if your engine needs a special mode to return error responses for invalid queries rather than silently accepting them. Default implementation does nothing.
+
+### `get_server_log(config: Config) -> str`
+
+Called after each test group; the returned log is attached to the group's test results (empty string for "no log"). The default reads `./<config.run_id>.server-log.txt`, which is where the built-in managers write it. Override this if your engine logs somewhere else.

@@ -18,9 +18,11 @@ class Config:
                  server_binary: str = "qlever-server",
                  index_binary: str = "qlever-index",
                  run_id: str = "qlever-sparql-conformance",
+                 access_token: str = "abc",
                  ):
         self.server_address = 'localhost'
         self.run_id = run_id
+        self.access_token = access_token
         self.image = image
         self.system = system
         self.port = port

@@ -86,13 +86,20 @@ class QleverBinariesManager(EngineManager):
     def default_graph_construct_query(self) -> str:
         return "CONSTRUCT {?s ?p ?o} WHERE { GRAPH ql:default-graph {?s ?p ?o}}"
 
-    def activate_syntax_test_mode(self, server_address: str, port: str):
-        url = f"http://{server_address}:{port}"
-        params = {"access-token": "abc", "syntax-test-mode": "true"}
+    def activate_syntax_test_mode(self, config: Config):
+        url = f"http://{config.server_address}:{config.port}"
+        params = {
+            "access-token": config.access_token,
+            "syntax-test-mode": "true",
+        }
         try:
             requests.get(url, params=params, timeout=5)
         except requests.exceptions.RequestException:
             pass
+
+    def get_server_log(self, config: Config) -> str:
+        # This manager logs under the fixed index name, not the run id.
+        return read_file(f"{_INDEX_NAME}.server-log.txt")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -164,7 +171,7 @@ class QleverBinariesManager(EngineManager):
             '-c', '2G',
             '-e', '1G',
             '-k', '200',
-            '-a', 'abc',
+            '-a', config.access_token,
         ]
         try:
             with open(log_file, 'w') as lf:
@@ -204,7 +211,7 @@ class QleverBinariesManager(EngineManager):
     def _http_request(
         self, config: Config, query: str, content_type: str, result_format: str
     ) -> Tuple[int, str]:
-        url = f"http://{config.server_address}:{config.port}?access-token=abc"
+        url = f"http://{config.server_address}:{config.port}?access-token={config.access_token}"
         headers = {
             "Accept": get_accept_header(result_format),
             "Content-type": content_type,

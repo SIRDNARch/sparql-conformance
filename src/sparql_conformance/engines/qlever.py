@@ -280,10 +280,10 @@ class QLeverManager(EngineManager):
     def default_graph_construct_query(self) -> str:
         return "CONSTRUCT {?s ?p ?o} WHERE { GRAPH ql:default-graph {?s ?p ?o}}"
 
-    def activate_syntax_test_mode(self, server_address, port):
-        url = f'http://{server_address}:{port}'
+    def activate_syntax_test_mode(self, config: Config):
+        url = f'http://{config.server_address}:{config.port}'
         params = {
-            "access-token": "abc",
+            "access-token": config.access_token,
             "syntax-test-mode": "true"
         }
         requests.get(url, params)

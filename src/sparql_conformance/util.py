@@ -25,7 +25,7 @@ def make_args(config: Config, **overrides):
         system=config.system,
         image=config.image,
         server_container=f"{config.run_id}-server-container",
-        access_token="abc",
+        access_token=config.access_token,
         only_pso_and_pos_permutations=False,
         use_patterns='yes',
         # STOP SERVER.

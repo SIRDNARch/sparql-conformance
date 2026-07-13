@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Set, Tuple
 
 from sparql_conformance.config import Config
+from sparql_conformance.util import read_file
 
 
 # Graph Store Protocol features a test may declare via mf:requires
@@ -131,7 +132,7 @@ class EngineManager(ABC):
         """
         return set(ALL_GRAPHSTORE_FEATURES)
 
-    def activate_syntax_test_mode(self, server_address: str, port: str):
+    def activate_syntax_test_mode(self, config: Config):
         """
         Called once before syntax tests run, after the server has started.
 
@@ -140,3 +141,15 @@ class EngineManager(ABC):
         silently accepting them). Default is a no-op.
         """
         pass
+
+    def get_server_log(self, config: Config) -> str:
+        """
+        Return the engine's server log for the current run ("" if there is
+        none). Called after each test group so the log can be attached to the
+        tests' results.
+
+        The default reads ./<run_id>.server-log.txt, which is where the
+        built-in managers write it. Engines that log elsewhere should
+        override this.
+        """
+        return read_file(f"./{config.run_id}.server-log.txt")

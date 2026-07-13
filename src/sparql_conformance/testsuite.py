@@ -183,7 +183,18 @@ class TestSuite:
         test_html = ["" for _ in range(len(expected_graphs))]
         expected_red = ["" for _ in range(len(expected_graphs))]
         test_red = ["" for _ in range(len(expected_graphs))]
-        assert(len(expected_graphs) == len(graphs))
+        if len(expected_graphs) != len(graphs):
+            # A malformed test (or engine response) must fail this test, not
+            # abort the whole run.
+            self.update_test_status(
+                test, Status.FAILED, ErrorMessage.RESULTS_NOT_THE_SAME)
+            setattr(
+                test,
+                "query_log",
+                f"Mismatched graph counts: expected {len(expected_graphs)} "
+                f"graph(s), got {len(graphs)}.",
+            )
+            return
         for i in range(len(expected_graphs)):
             status[i], error_type[i], expected_html[i], test_html[i], expected_red[i], test_red[i] = compare_ttl(
                     expected_graphs[i], graphs[i])
@@ -241,6 +252,15 @@ class TestSuite:
         for test in list_of_tests:
             self.update_test_status(test, status, error_type)
 
+    def refresh_server_log(self, list_of_tests: list):
+        """Attach the engine's current server log to the given tests."""
+        server_log = self.engine_manager.get_server_log(self.config)
+        if server_log:
+            self.log_for_all_tests(
+                list_of_tests,
+                "server_log",
+                util.truncate_log(util.remove_date_time_parts(server_log)))
+
     def prepare_test_environment(
             self,
             graph_paths: Tuple[Tuple[str, str], ...],
@@ -264,7 +284,7 @@ class TestSuite:
             self.engine_manager.cleanup(self.config)
             self.update_graph_status(list_of_tests, Status.FAILED, ErrorMessage.SERVER_ERROR)
         if index_success and server_success and "Syntax" in list_of_tests[0].type_name:
-            self.engine_manager.activate_syntax_test_mode(self.config.server_address, self.config.port)
+            self.engine_manager.activate_syntax_test_mode(self.config)
         # Cap the logs before copying them onto every test: a verbose engine
         # (e.g. GraphDB's ~1.9 MB DEBUG index log) would otherwise bloat the
         # result to gigabytes and exceed the visualize API's max string size.
@@ -342,12 +362,7 @@ class TestSuite:
                     self.process_failed_response(test, query_result)
                 self._report_test(test)
 
-            if os.path.exists("./TestSuite.server-log.txt"):
-                server_log = util.read_file("./TestSuite.server-log.txt")
-                self.log_for_all_tests(
-                    graphs_list_of_tests[graph],
-                    "server_log",
-                    util.remove_date_time_parts(server_log))
+            self.refresh_server_log(graphs_list_of_tests[graph])
             self.engine_manager.cleanup(self.config)
 
     def run_update_tests(self, graphs_list_of_tests):
@@ -400,12 +415,7 @@ class TestSuite:
                     self.process_failed_response(test, query_update_result)
                 self._report_test(test)
 
-            if os.path.exists("./TestSuite.server-log.txt"):
-                server_log = util.read_file("./TestSuite.server-log.txt")
-                self.log_for_all_tests(
-                    graphs_list_of_tests[graph],
-                    "server_log",
-                    util.remove_date_time_parts(server_log))
+            self.refresh_server_log(graphs_list_of_tests[graph])
             self.engine_manager.cleanup(self.config)
 
     def run_syntax_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
@@ -449,12 +459,7 @@ class TestSuite:
                     self.update_test_status(test, status, error_type)
                 self._report_test(test)
 
-            if os.path.exists("./TestSuite.server-log.txt"):
-                server_log = util.read_file("./TestSuite.server-log.txt")
-                self.log_for_all_tests(
-                    graphs_list_of_tests[graph_path],
-                    "server_log",
-                    util.remove_date_time_parts(server_log))
+            self.refresh_server_log(graphs_list_of_tests[graph_path])
             self.engine_manager.cleanup(self.config)
 
     def run_protocol_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
@@ -492,12 +497,7 @@ class TestSuite:
                 setattr(test, "response_extracted", extracted_expected_responses)
                 setattr(test, "response", got_responses)
                 self._report_test(test)
-            if os.path.exists("./TestSuite.server-log.txt"):
-                server_log = util.read_file("./TestSuite.server-log.txt")
-                self.log_for_all_tests(
-                    graphs_list_of_tests[graph_path],
-                    "server_log",
-                    util.remove_date_time_parts(server_log))
+            self.refresh_server_log(graphs_list_of_tests[graph_path])
             self.engine_manager.cleanup(self.config)
 
     def run_graphstore_protocol_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
@@ -536,13 +536,7 @@ class TestSuite:
                     extracted_expected_responses)
                 setattr(test, 'response', got_responses)
                 self._report_test(test)
-            if os.path.exists('./TestSuite.server-log.txt'):
-                server_log = util.read_file(
-                    './TestSuite.server-log.txt')
-                self.log_for_all_tests(
-                    graphs_list_of_tests[graph_path],
-                    'server_log',
-                    util.remove_date_time_parts(server_log))
+            self.refresh_server_log(graphs_list_of_tests[graph_path])
             self.engine_manager.cleanup(self.config)
 
     def run_structured_graphstore_protocol_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
@@ -590,13 +584,7 @@ class TestSuite:
                     extracted_expected_responses)
                 setattr(test, 'response', got_responses)
                 self._report_test(test)
-            if os.path.exists('./TestSuite.server-log.txt'):
-                server_log = util.read_file(
-                    './TestSuite.server-log.txt')
-                self.log_for_all_tests(
-                    graphs_list_of_tests[graph_path],
-                    'server_log',
-                    util.remove_date_time_parts(server_log))
+            self.refresh_server_log(graphs_list_of_tests[graph_path])
             self.engine_manager.cleanup(self.config)
 
     def run_federation_tests(self, graphs_list_of_tests: Dict[Tuple[Tuple[str, str], ...], List[TestObject]]):
@@ -640,9 +628,7 @@ class TestSuite:
 
                 query_result = self.engine_manager.query(self.config, query_text, test.result_format)
 
-                if os.path.exists('./TestSuite.server-log.txt'):
-                    setattr(test, 'server_log', util.remove_date_time_parts(
-                        util.read_file('./TestSuite.server-log.txt')))
+                self.refresh_server_log([test])
 
                 mock.stop()
                 self.engine_manager.cleanup(self.config)
@@ -682,9 +668,27 @@ class TestSuite:
             self.run_structured_graphstore_protocol_tests(
                 self.tests.get("graphstoreprotocol_structured", {}))
             self.run_federation_tests(self.tests.get("federation", {}))
+            self.skip_service_description_tests(self.tests.get("service", {}))
         except KeyboardInterrupt:
             log.warning("Interrupted by user.")
             self.engine_manager.cleanup(self.config)
+
+    def skip_service_description_tests(self, graphs_list_of_tests):
+        """
+        ServiceDescriptionTests are not executable by this framework; mark
+        them explicitly so results do not look like they were simply missed.
+        """
+        for tests in graphs_list_of_tests.values():
+            for test in tests:
+                log.info(f"Skipping (not supported): {test.name}")
+                self.update_test_status(
+                    test, Status.NOT_TESTED, ErrorMessage.NOT_TESTED)
+                setattr(
+                    test,
+                    "query_log",
+                    "ServiceDescriptionTests are not supported by this "
+                    "framework and were not run.",
+                )
 
     def compress_json_bz2(self, input_data, output_filename):
         with bz2.BZ2File(output_filename, "w") as raw_file:

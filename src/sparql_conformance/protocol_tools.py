@@ -67,7 +67,7 @@ def prepare_request(engine_manager: EngineManager, test: TestObject, request_wit
         request_body = request_body.replace(
             '$GRAPHSTORE$', test.config.GRAPHSTORE)
     if 'authorization:' not in request_header.lower():
-        request_header = request_header + '\r\n' + 'Authorization: Bearer abc'
+        request_header = request_header + '\r\n' + f'Authorization: Bearer {test.config.access_token}'
     body_encoding = 'utf-8'
     if 'charset=utf-16' in request_header.lower():
         body_encoding = 'utf-16'
@@ -144,7 +144,7 @@ def prepare_graphstore_request_from_action(
             header_lines.append(f'{h.name}: {value}')
 
     if 'authorization:' not in '\n'.join(header_lines).lower():
-        header_lines.append('Authorization: Bearer abc')
+        header_lines.append(f'Authorization: Bearer {test.config.access_token}')
 
     request_body = _apply_template_values(req.body or '', template_values)
     body_encoding = 'utf-16' if req.character_encoding.lower() == 'utf-16' else 'utf-8'
@@ -588,7 +588,7 @@ def prepare_request_from_action(
             header_lines.append(f'{h.name}: {h.value}')
 
     if 'authorization:' not in '\n'.join(header_lines).lower():
-        header_lines.append('Authorization: Bearer abc')
+        header_lines.append(f'Authorization: Bearer {test.config.access_token}')
 
     request_body = req.body or ''
     body_encoding = 'utf-16' if req.character_encoding.lower() == 'utf-16' else 'utf-8'
