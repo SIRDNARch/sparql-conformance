@@ -20,6 +20,7 @@ dependencies = [
 # The built-in engine managers (qlever, blazegraph, graphdb, jena, mdb,
 # oxigraph, virtuoso) and the qlever CLI integration require qlever-control.
 qlever = ["qlever"]
+dev = ["pytest", "ruff"]
 
 [project.scripts]
 sparql-conformance = "sparql_conformance.main:main"
@@ -36,3 +37,10 @@ sparql_conformance = [
     "Qleverfiles/*",
     "docker-compose.yml",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["test"]
+# Function-style tests only; keeps pytest from trying to collect the
+# production TestSuite class.
+python_classes = []
