@@ -4,9 +4,6 @@ services:
     build:
       context: https://github.com/SIRDNARch/sparql-conformance-ui.git#${SPARQL_CONFORMANCE_UI_BRANCH:-main}
       dockerfile: Dockerfile.web
-      args:
-        VITE_BASE_PATH: /
-        VITE_API_BASE_URL: /api
     ports:
       - "${PRIVATE_WEB_PORT:-3000}:80"
     depends_on:

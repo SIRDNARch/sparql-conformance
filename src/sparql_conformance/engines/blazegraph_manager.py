@@ -228,11 +228,10 @@ class BlazegraphManager(EngineManager):
         graph_paths: Tuple[Tuple[str, str], ...],
     ) -> None:
         destination = Path("RWStore.properties")
-        repo_root = Path(__file__).resolve().parents[3]
         source_file = self._DEFAULT_RWSTORE_TEMPLATE
         if self._requires_quads_mode(graph_paths):
             source_file = self._CONFORMANCE_RWSTORE_TEMPLATE
-        source = repo_root / "src" / "qblazegraph" / source_file
+        source = Path(__file__).resolve().parents[1] / "data" / source_file
         shutil.copy(source, destination)
 
     @staticmethod
