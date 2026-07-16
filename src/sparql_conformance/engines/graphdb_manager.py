@@ -15,7 +15,10 @@ from qlever.log import mute_log
 from qlever.util import run_command, run_curl_command
 import sparql_conformance.util as conformance_util
 from sparql_conformance.config import Config
-from sparql_conformance.engines.engine_manager import EngineManager
+from sparql_conformance.engines.engine_manager import (
+    EngineManager,
+    has_uri_scheme,
+)
 from sparql_conformance.rdf_tools import rdf_xml_to_turtle, write_ttl_file, replace_empty_base_iri
 
 
@@ -158,7 +161,7 @@ class GraphdbManager(EngineManager):
         for gp, gn in graph_paths:
             if gn and gn not in ("-", ""):
                 fname = Path(gp).resolve().name
-                abs_gn = gn if "://" in gn else DEFAULT_BASE_IRI + fname
+                abs_gn = gn if has_uri_scheme(gn) else DEFAULT_BASE_IRI + fname
                 file_to_named_uri[fname] = abs_gn
 
         base_data_url = (
@@ -171,7 +174,7 @@ class GraphdbManager(EngineManager):
                 src = Path(graph_path).resolve()
                 is_named = graph_name not in ("-", "", None)
                 if src.suffix == ".rdf":
-                    abs_name = graph_name if "://" in graph_name else DEFAULT_BASE_IRI + src.name
+                    abs_name = graph_name if has_uri_scheme(graph_name) else DEFAULT_BASE_IRI + src.name
                     turtle_data = rdf_xml_to_turtle(str(src), abs_name)
                 elif is_named:
                     turtle_data = src.read_text(encoding="utf-8")
@@ -187,7 +190,7 @@ class GraphdbManager(EngineManager):
                         turtle_data = src.read_text(encoding="utf-8")
 
                 if is_named:
-                    abs_name = graph_name if "://" in graph_name else DEFAULT_BASE_IRI + src.name
+                    abs_name = graph_name if has_uri_scheme(graph_name) else DEFAULT_BASE_IRI + src.name
                     encoded = urllib.parse.quote(abs_name, safe="")
                     target_url = f"{base_data_url}?graph={encoded}"
                 else:
@@ -353,7 +356,7 @@ class GraphdbManager(EngineManager):
         for gp, gn in graph_paths:
             if gn and gn not in ("-", ""):
                 fname = Path(gp).resolve().name
-                abs_gn = gn if "://" in gn else DEFAULT_BASE_IRI + fname
+                abs_gn = gn if has_uri_scheme(gn) else DEFAULT_BASE_IRI + fname
                 file_to_named_uri[fname] = abs_gn
         graph_files: list[str] = []
         cleanup_paths: list[Path] = []
@@ -362,7 +365,7 @@ class GraphdbManager(EngineManager):
             if graph_path.endswith(".rdf"):
                 graph_path_new = Path(graph_path).name
                 abs_graph_name = (
-                    graph_name if "://" in graph_name
+                    graph_name if has_uri_scheme(graph_name)
                     else DEFAULT_BASE_IRI + graph_path_new
                 )
                 turtle_data = rdf_xml_to_turtle(graph_path, abs_graph_name)
@@ -382,7 +385,7 @@ class GraphdbManager(EngineManager):
             if is_named_graph:
                 graph_path_new = src.stem + ".trig"
                 abs_graph_name = (
-                    graph_name if "://" in graph_name
+                    graph_name if has_uri_scheme(graph_name)
                     else DEFAULT_BASE_IRI + src.name
                 )
                 turtle_data = src.read_text(encoding="utf-8")

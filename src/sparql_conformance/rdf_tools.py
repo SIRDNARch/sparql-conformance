@@ -1,4 +1,5 @@
 import rdflib
+from rdflib.compare import isomorphic
 from sparql_conformance.test_object import Status, ErrorMessage
 import os
 import re
@@ -114,7 +115,7 @@ def compare_ttl(expected_ttl: str, query_ttl: str) -> tuple:
         return status, error_type, escape(
             expected_ttl), escaped_query, escaped_expected, f'<label class="red">{e}</label>'
 
-    is_isomorphic = expected_graph.isomorphic(query_graph)
+    is_isomorphic = isomorphic(expected_graph, query_graph)
     if is_isomorphic:
         status = Status.PASSED
         error_type = ""

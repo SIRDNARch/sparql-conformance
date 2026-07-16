@@ -1,10 +1,16 @@
 from enum import Enum
+import json
+import os
+from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, TYPE_CHECKING
 
 from sparql_conformance.config import Config
+from sparql_conformance.dataset_tools import prepare_query_dataset
+from sparql_conformance.result_set_tools import (
+    expected_is_result_set,
+    is_select_or_ask,
+)
 from sparql_conformance.util import local_name, read_file, escape
-import os
-import json
 
 if TYPE_CHECKING:
     from sparql_conformance.protocol_request import ProtocolRequest
@@ -34,6 +40,7 @@ class ErrorMessage(str, Enum):
     HTTP_NOT_FOUND = 'HTTP not found'
     UNDEFINED_FUNCTION = 'Undefined function'
     FUNCTION_ARGUMENT_ERROR = 'Function argument error'
+    TEST_SETUP_ERROR = 'Test setup error'
 
     @classmethod
     def is_query_error(cls, error: str) -> bool:
@@ -145,20 +152,49 @@ class TestObject:
         if isinstance(action_node, dict):
             self.query = local_name(action_node.get('query', 'no query'))
             self.graph = local_name(action_node.get('data', 'no query'))
-            self.query_file = read_file(os.path.join(self.path, self.query))
+            query_path = os.path.join(self.path, self.query)
+            self.query_file = read_file(query_path)
             self.graph_file = read_file(os.path.join(self.path, self.graph))
             process_graph_data(action_node.get('graphData'), self.index_files)
         else:
+            query_path = ""
             self.query = self.graph = self.query_file = self.graph_file = ''
 
         # Process result node
         if isinstance(result_node, dict):
             self.result = local_name(result_node.get('data', 'no query'))
             self.result_format = self.result[self.result.rfind('.') + 1:]
-            self.result_file = read_file(os.path.join(self.path, self.result))
+            result_path = os.path.join(self.path, self.result)
+            self.result_file = read_file(result_path)
+            self.result_public_id = Path(result_path).resolve().as_uri()
             process_graph_data(result_node.get('graphData'), self.result_files)
         else:
             self.result = self.result_file = self.result_format = ''
+            self.result_public_id = None
+
+        self.execution_query = self.query_file
+        self.dataset_sources = []
+        self.setup_error = ""
+        if self.type_name in ("QueryEvaluationTest", "CSVResultFormatTest"):
+            prepared_query = prepare_query_dataset(
+                self.query_file,
+                query_path,
+            )
+            self.execution_query = prepared_query.query
+            self.dataset_sources = list(prepared_query.sources)
+            self.setup_error = prepared_query.setup_error
+
+        self.expected_result_set = False
+        if self.result_format in ("rdf", "ttl"):
+            try:
+                self.expected_result_set = expected_is_result_set(
+                    self.result_file,
+                    self.result_format,
+                    self.result_public_id,
+                ) and is_select_or_ask(self.query_file)
+            except Exception:
+                # Evaluation reports malformed expected RDF as a format error.
+                pass
 
         # Initialize test execution results
         self.error_type = ''
@@ -183,7 +219,7 @@ class TestObject:
         """Return string representation of the test object."""
         return f'<TestObject name={self.name}, type={self.type_name}, uri={self.test}>'
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert test object to dictionary format for serialization."""
         graph_html = '<b>default:</b> <br> <pre>' + escape(self.graph_file) + '</pre>'
         for name, graph in self.index_files.items():
@@ -202,6 +238,14 @@ class TestObject:
             'query': escape(self.query),
             'graph': escape(self.graph),
             'queryFile': escape(self.query_file),
+            'executionQuery': escape(self.execution_query),
+            'datasetSources': [
+                {
+                    "localPath": source.local_path,
+                    "graphIri": source.graph_iri,
+                }
+                for source in self.dataset_sources
+            ],
             'graphFile': graph_html,
             'resultFile': escape(self.result_file),
             'status': escape(self.status),

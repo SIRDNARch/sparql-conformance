@@ -15,7 +15,10 @@ from qlever.log import mute_log
 from qlever.util import run_command
 import sparql_conformance.util as conformance_util
 from sparql_conformance.config import Config
-from sparql_conformance.engines.engine_manager import EngineManager
+from sparql_conformance.engines.engine_manager import (
+    EngineManager,
+    has_uri_scheme,
+)
 from sparql_conformance.rdf_tools import rdf_xml_to_turtle, write_ttl_file, replace_empty_base_iri
 
 
@@ -104,7 +107,7 @@ class JenaManager(EngineManager):
         cwd_uri = workdir.as_uri() + "/"
         file_to_named_uri: dict[str, str] = {}
         for gp, gn in graph_paths:
-            if gn and gn != "-" and "://" not in gn:
+            if gn and gn != "-" and not has_uri_scheme(gn):
                 fname = Path(gp).resolve().name
                 file_to_named_uri[fname] = (
                     f"http://{config.server_address}:{config.port}"
@@ -132,7 +135,7 @@ class JenaManager(EngineManager):
                         turtle_data = src.read_text(encoding="utf-8")
 
                 if graph_name and graph_name != "-":
-                    if "://" in graph_name:
+                    if has_uri_scheme(graph_name):
                         resolved_name = graph_name
                     else:
                         resolved_name = (
@@ -366,7 +369,7 @@ class JenaManager(EngineManager):
         # GRAPH variable bindings can match.
         file_to_named_uri: dict[str, str] = {}
         for gp, gn in graph_paths:
-            if gn and gn != "-" and "://" not in gn:
+            if gn and gn != "-" and not has_uri_scheme(gn):
                 fname = Path(gp).resolve().name
                 file_to_named_uri[fname] = (
                     f"http://{config.server_address}:{config.port}"
@@ -385,7 +388,7 @@ class JenaManager(EngineManager):
                 # the Fuseki query endpoint URL so that SPARQL queries using
                 # relative IRIs in GRAPH clauses resolve to the same URI.
                 resolved_name = graph_name
-                if "://" not in graph_name:
+                if not has_uri_scheme(graph_name):
                     resolved_name = (
                         f"http://{config.server_address}:{config.port}"
                         f"/{DEFAULT_NAME}/{graph_name}"

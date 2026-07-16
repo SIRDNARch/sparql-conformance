@@ -32,8 +32,8 @@ from sparql_conformance.protocol_tools import (
 )
 from sparql_conformance.rdf_tools import compare_ttl
 from sparql_conformance.result_set_tools import (
-    is_select_or_ask,
-    sparql_xml_to_result_set_ttl,
+    compare_rdf_result_set,
+    parse_expected_rdf,
 )
 from sparql_conformance.test_object import TestObject, Status, ErrorMessage
 from sparql_conformance.tsv_csv_tools import compare_sv
@@ -137,10 +137,14 @@ class TestSuite:
         raw_query_result = query_result
         try:
             response_format = response_format or result_format
-            if result_format == "ttl" and response_format == "srx":
-                query_result = sparql_xml_to_result_set_ttl(query_result)
-
-            if result_format == "srx":
+            if test.expected_result_set:
+                status, error_type, expected_html, test_html, expected_red, test_red = compare_rdf_result_set(
+                    expected_string,
+                    query_result,
+                    result_format,
+                    test.result_public_id,
+                )
+            elif result_format == "srx":
                 status, error_type, expected_html, test_html, expected_red, test_red = compare_xml(
                     expected_string, query_result, self.config.alias, self.config.number_types)
             elif result_format == "srj":
@@ -152,6 +156,14 @@ class TestSuite:
             elif result_format == "ttl":
                 status, error_type, expected_html, test_html, expected_red, test_red = compare_ttl(
                     expected_string, query_result)
+            elif result_format == "rdf":
+                expected_turtle = parse_expected_rdf(
+                    expected_string,
+                    result_format,
+                    test.result_public_id,
+                ).serialize(format="turtle")
+                status, error_type, expected_html, test_html, expected_red, test_red = compare_ttl(
+                    expected_turtle, query_result)
         except Exception as e:
             status = Status.FAILED
             error_type = ErrorMessage.FORMAT_ERROR
@@ -352,18 +364,33 @@ class TestSuite:
         """
         for graph in graphs_list_of_tests:
             log.info(f"Running query tests for graph / graphs: {graph}")
+            runnable_tests = []
+            for test in graphs_list_of_tests[graph]:
+                if test.setup_error:
+                    self.update_test_status(
+                        test,
+                        Status.NOT_TESTED,
+                        ErrorMessage.TEST_SETUP_ERROR,
+                    )
+                    setattr(test, "query_log", test.setup_error)
+                    self._report_test(test)
+                else:
+                    runnable_tests.append(test)
+            if not runnable_tests:
+                continue
             if not self.prepare_test_environment(
-                    graph, graphs_list_of_tests[graph]):
+                    graph, runnable_tests):
                 continue
 
-            for test in graphs_list_of_tests[graph]:
+            for test in runnable_tests:
                 log.info(f"Running: {test.name}")
                 response_format = test.result_format
-                if (test.result_format == "ttl"
-                        and is_select_or_ask(test.query_file)):
+                if test.expected_result_set:
                     response_format = "srx"
+                elif test.result_format in ("rdf", "ttl"):
+                    response_format = "ttl"
                 query_result = self.engine_manager.query(
-                    self.config, test.query_file, response_format)
+                    self.config, test.execution_query, response_format)
                 if query_result[0] == 200:
                     self.evaluate_query(
                         test.result_file,
@@ -375,7 +402,7 @@ class TestSuite:
                     self.process_failed_response(test, query_result)
                 self._report_test(test)
 
-            self.refresh_server_log(graphs_list_of_tests[graph])
+            self.refresh_server_log(runnable_tests)
             self.engine_manager.cleanup(self.config)
 
     def run_update_tests(self, graphs_list_of_tests):
@@ -612,6 +639,15 @@ class TestSuite:
         for graph_key in graphs_list_of_tests:
             for test in graphs_list_of_tests[graph_key]:
                 log.info(f"Running federation test: {test.name}")
+                if test.setup_error:
+                    self.update_test_status(
+                        test,
+                        Status.NOT_TESTED,
+                        ErrorMessage.TEST_SETUP_ERROR,
+                    )
+                    setattr(test, "query_log", test.setup_error)
+                    self._report_test(test)
+                    continue
 
                 service_data = test.action_node.get('serviceData', []) if isinstance(test.action_node, dict) else []
                 if isinstance(service_data, dict):
@@ -630,7 +666,7 @@ class TestSuite:
                 for orig in url_map:
                     url_map[orig] = mock.local_url_for(orig, host=mock_host)
 
-                query_text = test.query_file
+                query_text = test.execution_query
                 for orig, local in url_map.items():
                     query_text = query_text.replace(orig, local)
 
@@ -639,7 +675,16 @@ class TestSuite:
                     self._report_test(test)
                     continue
 
-                query_result = self.engine_manager.query(self.config, query_text, test.result_format)
+                response_format = test.result_format
+                if test.expected_result_set:
+                    response_format = "srx"
+                elif test.result_format in ("rdf", "ttl"):
+                    response_format = "ttl"
+                query_result = self.engine_manager.query(
+                    self.config,
+                    query_text,
+                    response_format,
+                )
 
                 self.refresh_server_log([test])
 
@@ -647,7 +692,13 @@ class TestSuite:
                 self.engine_manager.cleanup(self.config)
 
                 if query_result[0] == 200:
-                    self.evaluate_query(test.result_file, query_result[1], test, test.result_format)
+                    self.evaluate_query(
+                        test.result_file,
+                        query_result[1],
+                        test,
+                        test.result_format,
+                        response_format,
+                    )
                 else:
                     self.process_failed_response(test, query_result)
                 self._report_test(test)

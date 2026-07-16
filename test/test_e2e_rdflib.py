@@ -125,5 +125,13 @@ def test_result_file_is_valid_v2_json(run_results, tmp_path):
     assert loaded["suites"]["mini"]["info"]["tests"] == 8
     # Every test entry carries the fields the web UI relies on.
     for entry in loaded["suites"]["mini"]["tests"].values():
-        for field in ("name", "status", "typeName", "group", "errorType"):
+        for field in (
+            "name",
+            "status",
+            "typeName",
+            "group",
+            "errorType",
+            "executionQuery",
+            "datasetSources",
+        ):
             assert field in entry

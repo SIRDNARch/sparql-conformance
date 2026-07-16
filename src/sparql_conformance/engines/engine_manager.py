@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import re
 from typing import Set, Tuple
 
 from sparql_conformance.config import Config
@@ -12,6 +13,11 @@ ALL_GRAPHSTORE_FEATURES = {
     "IndirectGraphIdentification",
     "POSTGraphCreation",
 }
+
+
+def has_uri_scheme(value: str) -> bool:
+    """Return whether ``value`` starts with an RFC 3986 URI scheme."""
+    return bool(re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", value or ""))
 
 
 class EngineManager(ABC):

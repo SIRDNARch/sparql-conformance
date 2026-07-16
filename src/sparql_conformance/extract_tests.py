@@ -256,6 +256,9 @@ def collect_tests_by_graph(tests: List[TestObject]) -> Dict[str, Dict[Tuple[Tupl
         else:
             graph_refs = [fallback_graph]
 
+        for source in test.dataset_sources:
+            graph_refs.append((source.local_path, source.graph_iri))
+
         key = tuple(sorted(set(graph_refs)))
         category = type_to_category.get(test.type_name)
         if category == 'query' and isinstance(test.action_node, dict) and 'serviceData' in test.action_node:
