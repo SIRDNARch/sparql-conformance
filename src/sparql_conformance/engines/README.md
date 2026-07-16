@@ -51,7 +51,9 @@ class MyEngineManager(EngineManager):
         """
         Execute a SPARQL SELECT / CONSTRUCT / ASK query.
 
-        result_format is one of: "json", "xml", "ttl", "csv", "tsv", "srj", "srx"
+        result_format is one of: "json", "xml", "ttl", "csv", "tsv", "srj", "srx".
+        Return the requested wire format unchanged; the conformance core handles
+        conversion to legacy test-suite result representations.
 
         Returns: (http_status_code, response_body)
         """

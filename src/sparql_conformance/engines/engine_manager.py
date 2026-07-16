@@ -48,7 +48,9 @@ class EngineManager(ABC):
         Args:
             config: Test suite config, used to set engine-specific settings
             query: The SPARQL query to be executed
-            result_format: Type of the result
+            result_format: Requested wire format. Managers should return that
+                format without converting it to a test-suite-specific expected
+                representation.
 
         Returns:
            HTTP status code (int), query result (str)

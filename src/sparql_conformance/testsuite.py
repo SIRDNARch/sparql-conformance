@@ -31,6 +31,10 @@ from sparql_conformance.protocol_tools import (
     run_protocol_test_from_action,
 )
 from sparql_conformance.rdf_tools import compare_ttl
+from sparql_conformance.result_set_tools import (
+    is_select_or_ask,
+    sparql_xml_to_result_set_ttl,
+)
 from sparql_conformance.test_object import TestObject, Status, ErrorMessage
 from sparql_conformance.tsv_csv_tools import compare_sv
 from sparql_conformance.xml_tools import compare_xml
@@ -119,7 +123,8 @@ class TestSuite:
             expected_string: str,
             query_result: str,
             test: TestObject,
-            result_format: str):
+            result_format: str,
+            response_format: str = None):
         """
         Evaluates a query result based on the expected output and the format.
         """
@@ -129,7 +134,12 @@ class TestSuite:
         test_html = ""
         expected_red = ""
         test_red = ""
+        raw_query_result = query_result
         try:
+            response_format = response_format or result_format
+            if result_format == "ttl" and response_format == "srx":
+                query_result = sparql_xml_to_result_set_ttl(query_result)
+
             if result_format == "srx":
                 status, error_type, expected_html, test_html, expected_red, test_red = compare_xml(
                     expected_string, query_result, self.config.alias, self.config.number_types)
@@ -148,7 +158,7 @@ class TestSuite:
             setattr(
                 test,
                 "query_log",
-                f"Format error: {e}\nResponse:\n{query_result}",
+                f"Format error: {e}\nResponse:\n{raw_query_result}",
             )
 
         self.update_test_status(test, status, error_type)
@@ -348,16 +358,19 @@ class TestSuite:
 
             for test in graphs_list_of_tests[graph]:
                 log.info(f"Running: {test.name}")
+                response_format = test.result_format
+                if (test.result_format == "ttl"
+                        and is_select_or_ask(test.query_file)):
+                    response_format = "srx"
                 query_result = self.engine_manager.query(
-                    self.config,
-                    test.query_file,
-                    test.result_format)
+                    self.config, test.query_file, response_format)
                 if query_result[0] == 200:
                     self.evaluate_query(
                         test.result_file,
                         query_result[1],
                         test,
-                        test.result_format)
+                        test.result_format,
+                        response_format)
                 else:
                     self.process_failed_response(test, query_result)
                 self._report_test(test)

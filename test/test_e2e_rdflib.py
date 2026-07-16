@@ -16,6 +16,16 @@ from sparql_conformance.testsuite import TestSuite
 FIXTURE_SUITE = str(Path(__file__).parent / "fixtures" / "mini-suite")
 
 
+class RecordingRdflibManager(RdflibEngineManager):
+    def __init__(self):
+        super().__init__()
+        self.query_formats = []
+
+    def query(self, config, query, result_format):
+        self.query_formats.append((query, result_format))
+        return super().query(config, query, result_format)
+
+
 @pytest.fixture()
 def run_results(tmp_path, monkeypatch):
     # The suite writes engine work files and reads server logs from the
@@ -38,7 +48,7 @@ def run_results(tmp_path, monkeypatch):
         tests=tests,
         test_count=test_count,
         config=config,
-        engine_manager=RdflibEngineManager(),
+        engine_manager=RecordingRdflibManager(),
         results_dir=str(tmp_path),
         report_mode="none",
     )
@@ -61,6 +71,30 @@ def test_all_supported_tests_pass(run_results):
         assert statuses[name] == Status.PASSED, (
             f"{name}: {statuses[name]}"
         )
+
+
+def test_legacy_turtle_result_sets_are_requested_as_xml(run_results):
+    query_formats = run_results.engine_manager.query_formats
+    assert next(
+        result_format
+        for query, result_format in query_formats
+        if query.startswith("SELECT ?o WHERE")
+    ) == "srx"
+    assert next(
+        result_format
+        for query, result_format in query_formats
+        if query.startswith("ASK {")
+    ) == "srx"
+    assert next(
+        result_format
+        for query, result_format in query_formats
+        if query.startswith("SELECT ?o WHERE { <http://example.org/s2>")
+    ) == "srj"
+    assert next(
+        result_format
+        for query, result_format in query_formats
+        if query.startswith("CONSTRUCT { ?s")
+    ) == "ttl"
 
 
 def test_service_description_is_not_silently_counted_as_run(run_results):

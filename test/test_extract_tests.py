@@ -74,8 +74,8 @@ def test_file_contents_are_loaded(suite):
 
     select_basic = by_name["select-basic"]
     assert "SELECT ?o" in select_basic.query_file
-    assert select_basic.result_format == "srx"
-    assert "<sparql" in select_basic.result_file
+    assert select_basic.result_format == "ttl"
+    assert "rs:ResultSet" in select_basic.result_file
     assert select_basic.group == "mini-suite"
 
     assert by_name["select-int"].result_format == "srj"

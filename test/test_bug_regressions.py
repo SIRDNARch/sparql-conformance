@@ -102,3 +102,25 @@ def test_update_graph_count_mismatch_fails_test_not_run(tmp_path, monkeypatch):
     assert test.status == Status.FAILED
     assert test.error_type == ErrorMessage.RESULTS_NOT_THE_SAME
     assert "Mismatched graph counts" in test.query_log
+
+
+def test_malformed_xml_for_legacy_turtle_result_is_a_format_error():
+    suite = make_suite(RdflibEngineManager())
+    test = next(
+        test
+        for group in suite.tests["query"].values()
+        for test in group
+        if test.name == "select-basic"
+    )
+
+    suite.evaluate_query(
+        test.result_file,
+        "<not-finished>",
+        test,
+        result_format="ttl",
+        response_format="srx",
+    )
+
+    assert test.status == Status.FAILED
+    assert test.error_type == ErrorMessage.FORMAT_ERROR
+    assert "<not-finished>" in test.query_log

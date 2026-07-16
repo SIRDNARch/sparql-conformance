@@ -14,10 +14,10 @@
 
 :select-basic rdf:type mf:QueryEvaluationTest ;
     mf:name "select-basic" ;
-    rdfs:comment "Simple SELECT with an srx result" ;
+    rdfs:comment "Simple SELECT with a SPARQL 1.0 Turtle result set" ;
     dawgt:approval dawgt:Approved ;
     mf:action [ qt:query <select-basic.rq> ; qt:data <data.ttl> ] ;
-    mf:result <select-basic.srx> .
+    mf:result <select-basic.ttl> .
 
 :select-int rdf:type mf:QueryEvaluationTest ;
     mf:name "select-int" ;
@@ -28,7 +28,7 @@
 :ask-true rdf:type mf:QueryEvaluationTest ;
     mf:name "ask-true" ;
     mf:action [ qt:query <ask-true.rq> ; qt:data <data.ttl> ] ;
-    mf:result <ask-true.srx> .
+    mf:result <ask-true.ttl> .
 
 :construct-basic rdf:type mf:QueryEvaluationTest ;
     mf:name "construct-basic" ;
