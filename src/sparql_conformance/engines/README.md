@@ -8,7 +8,7 @@ An `EngineManager` is the adapter between this test harness and a SPARQL engine.
 2. Implement the five abstract methods (`setup`, `cleanup`, `query`, `update`, `protocol_endpoint`).
 3. Run:
    ```bash
-   sparql-conformance --engine ./my-engine-manager.py --name myrun --sparql11-dir /path/to/rdf-tests/sparql/sparql11
+   sparql-conformance --engine ./my-engine-manager.py --name myrun --test-suites '{"sparql11":"/path/to/rdf-tests/sparql/sparql11"}'
    ```
 
 ## Skeleton
@@ -51,9 +51,12 @@ class MyEngineManager(EngineManager):
         """
         Execute a SPARQL SELECT / CONSTRUCT / ASK query.
 
-        result_format is one of: "json", "xml", "ttl", "csv", "tsv", "srj", "srx".
-        Return the requested wire format unchanged; the conformance core handles
-        conversion to legacy test-suite result representations.
+        result_format is the wire-format token selected by the core, for
+        example "srx" (SPARQL Results XML), "srj" (SPARQL Results JSON),
+        "ttl", "csv", or "tsv". Return the requested wire format unchanged.
+        For legacy SELECT/ASK tests whose expected result uses the RDF
+        result-set vocabulary in Turtle, the core requests "srx" and performs
+        the conversion itself.
 
         Returns: (http_status_code, response_body)
         """
@@ -111,11 +114,13 @@ File formats you may receive: `.ttl`, `.nt`, `.nq`, `.trig`, `.rdf` (RDF/XML).
 
 ## A working example
 
-[`rdflib_manager.py`](rdflib_manager.py) is a minimal, complete `EngineManager` that runs queries in-process via [rdflib](https://rdflib.readthedocs.io/) — no server, no docker. It only supports query/format/update/syntax tests (no protocol or graph-store-protocol, since those need a real HTTP server), but it is the smallest working reference for the four required methods. Try it out:
+[`rdflib_manager.py`](rdflib_manager.py) is a minimal, complete `EngineManager` that runs queries in-process via [rdflib](https://rdflib.readthedocs.io/) — no server, no docker. It only supports query/format/update/syntax tests (no protocol or graph-store-protocol, since those need a real HTTP server), but it is the smallest working reference for the five required methods. Try it out:
 
 ```bash
 sparql-conformance --engine src/sparql_conformance/engines/rdflib_manager.py \
-  --name rdflib-demo --sparql11-dir /path/to/rdf-tests/sparql/sparql11 --report summary
+  --name rdflib-demo \
+  --test-suites '{"sparql11":"/path/to/rdf-tests/sparql/sparql11"}' \
+  --report summary
 ```
 
 ## Optional overrides

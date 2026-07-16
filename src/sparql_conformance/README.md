@@ -14,7 +14,7 @@ sparql_conformance setup qlever      # writes a Qleverfile, downloads the W3C te
 sparql_conformance test              # runs it, writes ./results/qlever.json.bz2
 ```
 
-Supported engine names for `setup`/`--engine`: `qlever`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`.
+Supported engine names for `setup`: `qlever`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`. The `--engine` option accepts the same names plus `qlever-binaries`.
 
 ## Commands
 
@@ -41,10 +41,8 @@ sparql_conformance test
 | `--name` | from Qleverfile | Run name; output is written to `<results-dir>/<name>.json.bz2` |
 | `--port` | from Qleverfile | Port the engine server listens on |
 | `--graph-store` | from Qleverfile | Graph store endpoint path for graph store protocol tests |
-| `--sparql11-dir` | `./testsuite-files/sparql/sparql11/` | Path to the SPARQL 1.1 test suite directory |
-| `--sparql10-dir` | `./testsuite-files/sparql/sparql10/` | Path to the SPARQL 1.0 test suite directory |
-| `--custom` | — | JSON object mapping extra suite names to directories, e.g. `'{"my-suite": "/path/to/dir"}'` |
-| `--type-alias` | from Qleverfile | JSON list of XSD type pairs treated as equivalent deviations, e.g. `"[['http://.../integer','http://.../int']]"` |
+| `--test-suites` | from Qleverfile | JSON object mapping suite names to directories, e.g. `'{"sparql11":"./testsuite-files/sparql/sparql11/","my-suite":"/path/to/custom"}'` |
+| `--type-alias` | from Qleverfile | JSON list of XSD type pairs treated as equivalent deviations, e.g. `'[["http://.../integer","http://.../int"]]'` |
 | `--exclude` | — | Comma-separated test/group names to skip |
 | `--include` | — | Comma-separated test/group names to run (all others skipped) |
 | `--binaries-directory` | — | Path to `qlever-index`/`qlever-server` binaries (native `qlever`/`qlever-binaries` engine only) |
@@ -61,6 +59,9 @@ sparql_conformance test --include aggregates
 # Readable console output while running
 sparql_conformance test --report line
 
+# Override the configured suites with standard and custom directories
+sparql_conformance test --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11","vendor":"../vendor-tests"}'
+
 # Compare this run against a previous one; prints regressions and fixes
 sparql_conformance test --compare-to results/old-run.json.bz2
 ```
@@ -73,7 +74,15 @@ Starts the engine with the given test's data loaded, then blocks so you can send
 sparql_conformance analyze "COUNT 1" "COUNT 2"
 ```
 
-Takes the same `--engine`, `--sparql11-dir`/`--sparql10-dir`/`--custom`, `--type-alias`, `--exclude`, `--binaries-directory` arguments as `test` (see above); `--include` is not needed since the test names are given as positional arguments.
+Takes the same `--engine`, `--test-suites`, `--type-alias`, `--exclude`, and `--binaries-directory` arguments as `test` (see above); `--include` is not needed since the test names are given as positional arguments.
+
+In a Qleverfile, configure the mapping as JSON without shell quotes:
+
+```ini
+TEST_SUITES = {"sparql11": "./testsuite-files/sparql/sparql11/", "sparql10": "./testsuite-files/sparql/sparql10/"}
+```
+
+`--test-suites` replaces `--sparql11-dir`, `--sparql10-dir`, and `--custom`; those old arguments and Qleverfile keys are no longer accepted.
 
 ### `visualize`
 

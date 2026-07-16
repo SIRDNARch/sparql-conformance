@@ -7,7 +7,11 @@ import sys
 from sparql_conformance.config import Config
 from sparql_conformance.engines import get_engine_manager
 from sparql_conformance.engines.engine_manager import EngineManager
-from sparql_conformance.runner import assemble_suites, run_suites
+from sparql_conformance.runner import (
+    assemble_suites,
+    parse_test_suites,
+    run_suites,
+)
 
 try:
     from qlever.log import log
@@ -80,26 +84,16 @@ def main():
         help="Graph store endpoint name for graph store protocol tests (default: sparql)",
     )
     parser.add_argument(
-        "--sparql11-dir",
-        default=None,
-        dest="sparql11_dir",
-        help="Path to the SPARQL 1.1 test suite directory.",
-    )
-    parser.add_argument(
-        "--sparql10-dir",
-        default=None,
-        dest="sparql10_dir",
-        help="Path to the SPARQL 1.0 test suite directory.",
-    )
-    parser.add_argument(
-        "--custom",
-        default=None,
-        dest="custom",
-        type=json.loads,
-        metavar="NAME_TO_DIR_JSON",
+        "--test-suites",
+        required=True,
+        dest="test_suites",
+        type=parse_test_suites,
+        metavar="SUITE_TO_DIR_JSON",
         help=(
             "JSON object mapping suite names to directories.\n"
-            "Example: --custom '{\"my-suite\": \"/path/to/dir\", \"proto\": \"/path/to/proto\"}'"
+            "Example: --test-suites "
+            '\'{"sparql11": "/path/to/sparql11", '
+            '"my-suite": "/path/to/custom"}\''
         ),
     )
     parser.add_argument(
@@ -139,7 +133,9 @@ def main():
         type=json.loads,
         help=(
             "JSON list of type pairs considered as intended deviations.\n"
-            "Example: --type-alias \"[['xsd:integer','xsd:int']]\""
+            "Example: --type-alias "
+            '\'[["http://www.w3.org/2001/XMLSchema#integer",'
+            '"http://www.w3.org/2001/XMLSchema#int"]]\''
         ),
     )
     parser.add_argument(
@@ -166,16 +162,11 @@ def main():
 
     args = parser.parse_args()
 
-    active_suites = assemble_suites(
-        args.sparql11_dir, args.sparql10_dir, args.custom
-    )
+    active_suites = assemble_suites(args.test_suites)
 
-    if not active_suites:
-        parser.error("Provide at least one of --sparql11-dir, --sparql10-dir, --custom.")
-
-    for _, d in active_suites:
+    for suite_name, d in active_suites:
         if not os.path.isdir(d):
-            parser.error(f"Test suite directory not found: {d}")
+            parser.error(f"Test suite {suite_name!r} directory not found: {d}")
 
     if os.path.isfile(args.engine):
         engine_manager = load_engine_from_file(args.engine)

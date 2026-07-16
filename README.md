@@ -25,7 +25,7 @@ Try it against the bundled in-process rdflib engine — no server or engine inst
 sparql-conformance \
   --engine src/sparql_conformance/engines/rdflib_manager.py \
   --name rdflib-demo \
-  --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11"}' \
   --report summary
 ```
 
@@ -47,10 +47,10 @@ This installs the `sparql_conformance` package and the `sparql-conformance` cons
 sparql-conformance \
   --engine <engine-file-or-type> \
   --name <run-name> \
-  --sparql11-dir <path/to/sparql11>
+  --test-suites '{"sparql11":"<path/to/sparql11>"}'
 ```
 
-At least one of `--sparql11-dir`, `--sparql10-dir`, `--custom` is required.
+`--test-suites` is a required JSON object mapping result-suite names to directories. Add any number of standard or custom suites; they run in the order in which they appear in the object.
 
 ### Arguments
 
@@ -58,9 +58,7 @@ At least one of `--sparql11-dir`, `--sparql10-dir`, `--custom` is required.
 |---|---|---|---|
 | `--engine` | yes | — | Path to a Python file containing an `EngineManager` subclass, or a named engine type if [qlever-control](https://github.com/ad-freiburg/qlever-control) is installed. See [Adding support for a new engine](#adding-support-for-a-new-engine). |
 | `--name` | yes | — | Label for this run; output is written to `<results-dir>/<name>.json.bz2` |
-| `--sparql11-dir` | one of the three | — | Path to the SPARQL 1.1 test suite directory |
-| `--sparql10-dir` | one of the three | — | Path to the SPARQL 1.0 test suite directory |
-| `--custom` | one of the three | — | JSON object mapping extra suite names to directories. Example: `--custom '{"my-suite": "/path/to/dir"}'` |
+| `--test-suites` | yes | — | JSON object mapping suite names to directories. Example: `--test-suites '{"sparql11":"/path/to/sparql11","my-suite":"/path/to/custom"}'` |
 | `--results-dir` | no | `./results` | Directory for the output JSON file |
 | `--port` | no | `7001` | Port the engine server listens on |
 | `--graph-store` | no | `sparql` | Graph store endpoint path for graph store protocol tests |
@@ -79,18 +77,22 @@ At least one of `--sparql11-dir`, `--sparql10-dir`, `--custom` is required.
 sparql-conformance \
   --engine src/sparql_conformance/engines/qlever-binaries-manager.py \
   --name qlever-2024 \
-  --sparql11-dir ../rdf-tests/sparql/sparql11 \
-  --sparql10-dir ../rdf-tests/sparql/sparql10 \
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11","sparql10":"../rdf-tests/sparql/sparql10"}' \
   --binaries-directory ../qlever/build
 ```
+
+### Migrating suite arguments
+
+`--test-suites` replaces `--sparql11-dir`, `--sparql10-dir`, and `--custom`; the old arguments are no longer accepted. The JSON keys become the suite keys in the result file. Keep the whole JSON value in single quotes in shells so its double quotes reach the application unchanged.
 
 ### Type aliases
 
 Some engines return a numerically equivalent but differently typed literal (e.g. `xsd:int` instead of `xsd:integer`). Use `--type-alias` to mark these as intended deviations rather than failures:
 
 ```bash
-sparql-conformance --engine ... --name my-run --sparql11-dir ../rdf-tests/sparql/sparql11 \
-  --type-alias "[['http://www.w3.org/2001/XMLSchema#integer', 'http://www.w3.org/2001/XMLSchema#int']]"
+sparql-conformance --engine ... --name my-run \
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11"}' \
+  --type-alias '[["http://www.w3.org/2001/XMLSchema#integer","http://www.w3.org/2001/XMLSchema#int"]]'
 ```
 
 ### Filtering tests
@@ -99,11 +101,13 @@ Run or skip a single test or group by name:
 
 ```bash
 # Run only the property path group
-sparql-conformance --engine ... --name my-run --sparql11-dir ../rdf-tests/sparql/sparql11 \
+sparql-conformance --engine ... --name my-run \
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11"}' \
   --include pp01,pp02,pp06
 
 # Skip the aggregates group
-sparql-conformance --engine ... --name my-run --sparql11-dir ../rdf-tests/sparql/sparql11 \
+sparql-conformance --engine ... --name my-run \
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11"}' \
   --exclude aggregates
 ```
 
@@ -136,7 +140,7 @@ By default a run only prints progress and writes the JSON file. For readable fee
 
 ```bash
 sparql-conformance --engine <engine-file> --name my-run \
-  --sparql11-dir ../rdf-tests/sparql/sparql11 --report line
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11"}' --report line
 ```
 
 Colors are only used when writing to a terminal; piping to a file (or setting `NO_COLOR`) produces plain text.
@@ -147,7 +151,7 @@ Pass a previous result file to `--compare-to` to see what changed. It prints the
 
 ```bash
 sparql-conformance --engine <engine-file> --name new-run \
-  --sparql11-dir ../rdf-tests/sparql/sparql11 \
+  --test-suites '{"sparql11":"../rdf-tests/sparql/sparql11"}' \
   --compare-to results/old-run.json.bz2
 ```
 

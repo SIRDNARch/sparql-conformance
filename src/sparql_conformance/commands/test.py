@@ -24,10 +24,20 @@ class TestCommand(QleverCommand):
 
     def relevant_qleverfile_arguments(self) -> dict[str, list[str]]:
         return {
-            "conformance": ["name", "port", "engine",
-                            "graph_store", "sparql11_dir", "sparql10_dir", "custom",
-                            "type_alias", "exclude", "include", "binaries_directory",
-                            "results_dir", "report", "compare_to"],
+            "conformance": [
+                "name",
+                "port",
+                "engine",
+                "graph_store",
+                "test_suites",
+                "type_alias",
+                "exclude",
+                "include",
+                "binaries_directory",
+                "results_dir",
+                "report",
+                "compare_to",
+            ],
             "runtime": ["system"],
             "qlever": ["qlever_image"],
             "oxigraph": ["oxigraph_image"],
@@ -56,17 +66,14 @@ class TestCommand(QleverCommand):
 
         warn_if_missing_image(args.system, image, args.engine)
 
-        active_suites = assemble_suites(
-            args.sparql11_dir, args.sparql10_dir, args.custom
-        )
+        active_suites = assemble_suites(args.test_suites)
 
-        if not active_suites:
-            log.error("Provide at least one of --sparql11-dir, --sparql10-dir, --custom.")
-            return False
-
-        for _, d in active_suites:
+        for suite_name, d in active_suites:
             if not Path(d).is_dir():
-                log.error(f"Test suite directory not found: {d}. Use `sparql_conformance setup` to download it.")
+                log.error(
+                    f"Test suite {suite_name!r} directory not found: {d}. "
+                    "Use `sparql_conformance setup` to download it."
+                )
                 return False
 
         if args.engine == "blazegraph" and args.graph_store == "sparql":

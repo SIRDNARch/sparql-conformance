@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from sparql_conformance.runner import parse_test_suites
+
 
 def qleverfile_args(all_args: dict[str, dict[str, tuple]]) -> None:
     """Define all SPARQL-conformance-specific Qleverfile parameters"""
@@ -32,42 +34,25 @@ def qleverfile_args(all_args: dict[str, dict[str, tuple]]) -> None:
         required=True,
         help="Name of the graph store endpoint used for graph store protocol tests.",
     )
-    conformance["testsuite_dir"] = arg(
-        "--testsuite-dir",
-        type=str,
-        default=None,
-        help="Path to the test suite directory (used by the analyze command).",
-    )
-    conformance["sparql11_dir"] = arg(
-        "--sparql11-dir",
-        type=str,
-        default=None,
-        help="Path to the SPARQL 1.1 test suite directory.",
-    )
-    conformance["sparql10_dir"] = arg(
-        "--sparql10-dir",
-        type=str,
-        default=None,
-        help="Path to the SPARQL 1.0 test suite directory.",
-    )
-    conformance["custom"] = arg(
-        "--custom",
-        type=json.loads,
-        default=None,
+    conformance["test_suites"] = arg(
+        "--test-suites",
+        type=parse_test_suites,
+        required=True,
+        metavar="SUITE_TO_DIR_JSON",
         help=(
-            "JSON object mapping suite names to directories.\n"
-            "Example: --custom '{\"my-suite\": \"/path/to/dir\"}'"
+            "JSON object mapping suite names to directories. "
+            'Example: \'{"sparql11": "/path/to/sparql11"}\''
         ),
     )
     conformance["type_alias"] = arg(
         "--type-alias",
         type=json.loads,
         required=False,
-        help=("Type mismatches that will be considered intended."
-              "ex. \"[['http://www.w3.org/2001/XMLSchema#integer', "
-              "'http://www.w3.org/2001/XMLSchema#int']..."
-              "['http://www.w3.org/2001/XMLSchema#float',"
-              "'http://www.w3.org/2001/XMLSchema#double']]\""
+        help=(
+            "JSON list of datatype pairs that will be considered intended "
+            "mismatches. Example: "
+            '\'[["http://www.w3.org/2001/XMLSchema#integer",'
+            '"http://www.w3.org/2001/XMLSchema#int"]]\''
         ),
     )
     conformance["engine"] = arg(

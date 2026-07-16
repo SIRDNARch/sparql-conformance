@@ -1,6 +1,7 @@
-"""Shared suite loop used by the standalone CLI and the qlever-control
-`sparql_conformance test` command."""
+"""Shared suite helpers used by the standalone CLI and qlever-control."""
 
+import argparse
+import json
 import os
 
 from sparql_conformance import console_report
@@ -8,16 +9,50 @@ from sparql_conformance.extract_tests import extract_tests
 from sparql_conformance.testsuite import TestSuite
 
 
-def assemble_suites(sparql11_dir, sparql10_dir, custom):
-    """Build the list of (suite_key, directory) pairs to run."""
-    standard_suites = [
-        ("sparql11", sparql11_dir),
-        ("sparql10", sparql10_dir),
-    ]
-    active_suites = [(key, d) for key, d in standard_suites if d is not None]
-    if custom:
-        active_suites.extend(custom.items())
-    return active_suites
+def parse_test_suites(value: str) -> dict[str, str]:
+    """Parse a JSON object mapping test-suite names to directories."""
+    duplicate_keys = []
+
+    def object_from_pairs(pairs):
+        result = {}
+        for key, directory in pairs:
+            if key in result:
+                duplicate_keys.append(key)
+            result[key] = directory
+        return result
+
+    try:
+        test_suites = json.loads(value, object_pairs_hook=object_from_pairs)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(f"invalid JSON: {error}") from error
+
+    if not isinstance(test_suites, dict):
+        raise argparse.ArgumentTypeError(
+            "must be a JSON object mapping suite names to directories"
+        )
+    if duplicate_keys:
+        duplicates = ", ".join(repr(key) for key in duplicate_keys)
+        raise argparse.ArgumentTypeError(f"duplicate suite name(s): {duplicates}")
+    if not test_suites:
+        raise argparse.ArgumentTypeError("must contain at least one test suite")
+
+    for name, directory in test_suites.items():
+        if not name.strip():
+            raise argparse.ArgumentTypeError("suite names must not be blank")
+        if not isinstance(directory, str):
+            raise argparse.ArgumentTypeError(
+                f"directory for suite {name!r} must be a string"
+            )
+        if not directory.strip():
+            raise argparse.ArgumentTypeError(
+                f"directory for suite {name!r} must not be blank"
+            )
+    return test_suites
+
+
+def assemble_suites(test_suites):
+    """Build the ordered list of (suite_key, directory) pairs to run."""
+    return list(test_suites.items())
 
 
 def run_suites(active_suites, make_config, make_engine_manager, name,
