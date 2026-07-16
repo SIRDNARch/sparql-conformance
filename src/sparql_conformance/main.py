@@ -2,11 +2,15 @@ import argparse
 import importlib.util
 import json
 import os
-import sys
 
 from sparql_conformance.config import Config
 from sparql_conformance.engines import get_engine_manager
 from sparql_conformance.engines.engine_manager import EngineManager
+from sparql_conformance.qlever_control import (
+    QleverControlRequiredError,
+    is_qlever_control_import_error,
+    installation_message,
+)
 from sparql_conformance.runner import (
     assemble_suites,
     parse_test_suites,
@@ -25,25 +29,41 @@ def load_engine_from_file(path: str) -> EngineManager:
     """Dynamically load the first EngineManager subclass found in a Python file."""
     abs_path = os.path.abspath(path)
     spec = importlib.util.spec_from_file_location("engine_module", abs_path)
-    if spec is None:
+    if spec is None or spec.loader is None:
         raise ValueError(f"Cannot load module from {path}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except ImportError as error:
+        if is_qlever_control_import_error(error):
+            raise QleverControlRequiredError(
+                installation_message(f"Engine manager `{path}`")
+            ) from error
+        raise
     for name in dir(module):
         obj = getattr(module, name)
-        if isinstance(obj, type) and issubclass(obj, EngineManager) and obj is not EngineManager:
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, EngineManager)
+            and obj is not EngineManager
+        ):
             return obj()
     raise ValueError(f"No EngineManager subclass found in {path}")
 
 
 def get_engine_manager_by_name(name: str) -> EngineManager:
     """Resolve a named engine type (the built-in managers require qlever-control)."""
-    try:
-        return get_engine_manager(name)
-    except ImportError:
-        print(f"Named engine '{name}' requires qlever-control to be installed. "
-              "Provide a file path to --engine instead.", file=sys.stderr)
-        sys.exit(1)
+    return get_engine_manager(name)
+
+
+def looks_like_file_path(value: str) -> bool:
+    """Return whether an engine argument was intended as a file path."""
+    return (
+        value.endswith(".py")
+        or value.startswith(".")
+        or os.sep in value
+        or (os.altsep is not None and os.altsep in value)
+    )
 
 
 def main():
@@ -168,10 +188,17 @@ def main():
         if not os.path.isdir(d):
             parser.error(f"Test suite {suite_name!r} directory not found: {d}")
 
-    if os.path.isfile(args.engine):
-        engine_manager = load_engine_from_file(args.engine)
-    else:
-        engine_manager = get_engine_manager_by_name(args.engine)
+    try:
+        if os.path.isfile(args.engine):
+            engine_manager = load_engine_from_file(args.engine)
+        elif looks_like_file_path(args.engine):
+            parser.error(f"Engine manager file not found: {args.engine}")
+        else:
+            engine_manager = get_engine_manager_by_name(args.engine)
+    except QleverControlRequiredError as error:
+        parser.exit(1, f"{error}\n")
+    except ValueError as error:
+        parser.error(str(error))
 
     alias = [tuple(x) for x in args.type_alias] if args.type_alias else []
 

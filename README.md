@@ -37,7 +37,12 @@ This writes `results/rdflib-demo.json.bz2` and prints a pass/fail summary. To te
 pip install -e .
 ```
 
-This installs the `sparql_conformance` package and the `sparql-conformance` console script (`python3 main.py ...` also still works without installing). The built-in engine managers (`qlever`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso`) and the `sparql_conformance <command>` CLI additionally require [qlever-control](https://github.com/ad-freiburg/qlever-control) — see the [integration doc](src/sparql_conformance/README.md). Without qlever-control, provide your own engine via `--engine <file>`.
+This installs the `sparql_conformance` package and both console scripts. The
+standalone `sparql-conformance --engine <file>` workflow does not require
+qlever-control. The named built-in engines and the
+`sparql_conformance setup|test|analyze|visualize` workflow require
+qlever-control and print the required installation command when it is absent.
+See the [integration documentation](src/sparql_conformance/README.md).
 
 **Prerequisites:** Python 3.9+, and the W3C test suite files (`git clone https://github.com/w3c/rdf-tests.git`).
 
@@ -170,4 +175,13 @@ pytest
 
 ## qlever-control integration
 
-For built-in support of seven engines with no adapter to write, plus `setup`/`analyze`/`visualize` commands, see [`src/sparql_conformance/README.md`](src/sparql_conformance/README.md).
+For built-in support of seven engines with no adapter to write, plus
+`setup`/`analyze`/`visualize` commands, install the integration branch:
+
+```bash
+python -m pip install \
+  "git+https://github.com/SIRDNARch/qlever-control.git@sparql-conformance-command-all-engines"
+```
+
+Then see
+[`src/sparql_conformance/README.md`](src/sparql_conformance/README.md).

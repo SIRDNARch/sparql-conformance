@@ -2,7 +2,35 @@
 
 This directory is the `sparql_conformance` package: the same conformance-test harness as the [repository root](../../README.md), wired into the [qlever-control](https://github.com/ad-freiburg/qlever-control) CLI so it can be run as `sparql_conformance <command>` against QLever and six other engines out of the box, without writing an `EngineManager` yourself.
 
-It requires qlever-control to be installed (`pip install qlever`); the `sparql_conformance` console script comes from qlever-control's own packaging.
+The `sparql_conformance` console script is installed by this package, but it
+loads qlever-control lazily. Install the required integration branch with:
+
+```bash
+python -m pip install \
+  "git+https://github.com/SIRDNARch/qlever-control.git@sparql-conformance-command-all-engines"
+```
+
+Without qlever-control, the independent `sparql-conformance --engine
+/path/to/manager.py ...` workflow remains available.
+
+### How the integrated CLI is split between the packages
+
+When both packages are installed, they cooperate rather than either package
+containing a copy of the other:
+
+```text
+sparql_conformance analyze
+  -> executable owned by sparql-conformance
+  -> qlever-control parses the Qleverfile and dispatches the command
+  -> AnalyzeCommand is loaded from sparql_conformance.commands
+  -> the selected engine manager uses qlever-control to operate the engine
+```
+
+In other words, sparql-conformance owns the executable and the conformance
+command implementations. qlever-control supplies the reusable CLI/Qleverfile
+framework and the engine-management commands. Its command discovery uses
+Python imports, allowing it to find `sparql_conformance.commands` in the
+separately installed package, including in editable installations.
 
 ## Quickstart
 

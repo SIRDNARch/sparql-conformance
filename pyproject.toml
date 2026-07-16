@@ -17,13 +17,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The built-in engine managers (qlever, blazegraph, graphdb, jena, mdb,
-# oxigraph, virtuoso) and the qlever CLI integration require qlever-control.
-qlever = ["qlever"]
 dev = ["pytest", "ruff"]
 
 [project.scripts]
 sparql-conformance = "sparql_conformance.main:main"
+sparql_conformance = "sparql_conformance.integrated_main:main"
 
 [project.urls]
 Repository = "https://github.com/ad-freiburg/sparql-conformance"
