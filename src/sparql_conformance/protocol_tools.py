@@ -223,6 +223,7 @@ def send_raw_http(
         total_timeout: float = 30.0) -> str:
     body_bytes = request_body.encode(encoding)
     request_head = _set_content_length(request_head, len(body_bytes))
+    request_head = _ensure_connection_close(request_head)
     request_bytes = request_head.encode('utf-8') + body_bytes
     try:
         with socket.create_connection(
@@ -260,6 +261,17 @@ def _set_content_length(request_head: str, content_length: int) -> str:
     ]
     lines.append(f'Content-Length: {content_length}')
     return '\r\n'.join(lines) + '\r\n\r\n'
+
+
+def _ensure_connection_close(request_head: str) -> str:
+    stripped_head = request_head
+    if stripped_head.endswith('\r\n\r\n'):
+        stripped_head = stripped_head[:-4]
+    lines = [line for line in stripped_head.split('\r\n') if line != '']
+    if not any(line.lower().startswith('connection:') for line in lines):
+        lines.append('Connection: close')
+    return '\r\n'.join(lines) + '\r\n\r\n'
+
 
 def parse_chunked_body(response_body: str) -> str:
     """
