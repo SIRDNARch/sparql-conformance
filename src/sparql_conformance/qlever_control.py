@@ -41,7 +41,11 @@ def installation_message(operation: str | None = None) -> str:
     )
     return (
         f"{heading}\n\n"
-        "Please install qlever-control from branch "
+        "For local development, install both checkouts in editable mode "
+        "(qlever-control first):\n\n"
+        "  python -m pip install -e /path/to/qlever-control\n"
+        "  python -m pip install -e /path/to/sparql-conformance\n\n"
+        "Or install qlever-control from branch "
         f"`{QLEVER_CONTROL_BRANCH}`:\n\n"
         "  python -m pip install \\\n"
         f'    "git+{QLEVER_CONTROL_REPOSITORY}@{QLEVER_CONTROL_BRANCH}"'

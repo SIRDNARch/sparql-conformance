@@ -152,12 +152,26 @@ def test_named_engine_prints_qlever_control_installation_hint(tmp_path):
 
     assert result.returncode == 1
     assert "Engine `qlever` requires qlever-control" in result.stderr
+    assert "pip install -e /path/to/qlever-control" in result.stderr
     assert QLEVER_CONTROL_BRANCH in result.stderr
 
 
 def test_integrated_cli_prints_qlever_control_installation_hint(tmp_path):
     result = run_module(
         "sparql_conformance.integrated_main",
+        "--help",
+        env=isolated_environment(tmp_path),
+    )
+
+    assert result.returncode == 1
+    assert "The `sparql_conformance` command requires qlever-control" in result.stderr
+    assert QLEVER_CONTROL_BRANCH in result.stderr
+
+
+def test_package_module_runs_integrated_cli(tmp_path):
+    result = run_module(
+        "sparql_conformance",
+        "visualize",
         "--help",
         env=isolated_environment(tmp_path),
     )

@@ -3,7 +3,24 @@
 This directory is the `sparql_conformance` package: the same conformance-test harness as the [repository root](../../README.md), wired into the [qlever-control](https://github.com/ad-freiburg/qlever-control) CLI so it can be run as `sparql_conformance <command>` against QLever and six other engines out of the box, without writing an `EngineManager` yourself.
 
 The `sparql_conformance` console script is installed by this package, but it
-loads qlever-control lazily. Install the required integration branch with:
+loads qlever-control lazily. To test local changes in sibling checkouts,
+install both projects in editable mode, with qlever-control first:
+
+```bash
+python -m pip install -e ../qlever-control
+python -m pip install -e .
+```
+
+The second command is important when upgrading from a qlever-control revision
+that also provided the `sparql_conformance` executable. During that upgrade,
+pip removes the shared executable; reinstalling sparql-conformance recreates
+it with a single owning package. From a sparql-conformance checkout, the
+equivalent second command is `python -m pip install -e .`. The CLI can also be
+run without its generated executable as
+`python -m sparql_conformance visualize`.
+
+To test the pushed integration branch instead of local qlever-control changes,
+replace the first editable-install command with:
 
 ```bash
 python -m pip install \

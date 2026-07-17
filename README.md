@@ -176,12 +176,23 @@ pytest
 ## qlever-control integration
 
 For built-in support of seven engines with no adapter to write, plus
-`setup`/`analyze`/`visualize` commands, install the integration branch:
+`setup`/`analyze`/`visualize` commands, install both local checkouts in
+editable mode. Install qlever-control first so sparql-conformance remains the
+owner of the `sparql_conformance` executable:
 
 ```bash
-python -m pip install \
-  "git+https://github.com/SIRDNARch/qlever-control.git@sparql-conformance-command-all-engines"
+python -m pip install -e ../qlever-control
+python -m pip install -e .
 ```
+
+The order matters when upgrading from an older qlever-control revision that
+also installed the `sparql_conformance` executable: pip removes that old
+executable while upgrading qlever-control. Reinstalling this package restores
+the executable with sparql-conformance as its sole owner. If needed, the
+equivalent module invocation is `python -m sparql_conformance visualize`.
+
+Use the Git URL only when you intentionally want to test the pushed
+qlever-control branch instead of your local working tree.
 
 Then see
 [`src/sparql_conformance/README.md`](src/sparql_conformance/README.md).
