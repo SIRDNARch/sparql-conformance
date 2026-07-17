@@ -66,7 +66,7 @@ sparql-conformance \
 | `--test-suites` | yes | — | JSON object mapping suite names to directories. Example: `--test-suites '{"sparql11":"/path/to/sparql11","my-suite":"/path/to/custom"}'` |
 | `--results-dir` | no | `./results` | Directory for the output JSON file |
 | `--port` | no | `7001` | Port the engine server listens on |
-| `--graph-store` | no | `sparql` | Graph store endpoint path for graph store protocol tests |
+| `--graph-store` | no | engine-specific | Override the graph store endpoint supplied by the engine manager |
 | `--binaries-directory` | no | `""` | Directory containing engine binaries (forwarded to the engine manager via `config.path_to_binaries`) |
 | `--server-binary` | no | `qlever-server` | Server binary name (used by the bundled QLever-binaries engine manager) |
 | `--index-binary` | no | `qlever-index` | Index-builder binary name (used by the bundled QLever-binaries engine manager) |

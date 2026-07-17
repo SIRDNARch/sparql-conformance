@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple, List, Optional
 
 
 class Config:
@@ -9,7 +9,7 @@ class Config:
                  image: str,
                  system: str,
                  port: str,
-                 graph_store: str,
+                 graph_store: Optional[str],
                  testsuite_dir: str,
                  type_alias: List[Tuple[str, str]],
                  binaries_directory: str,

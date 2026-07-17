@@ -161,7 +161,7 @@ def test_duplicate_dataset_sources_are_staged_once(tmp_path):
     assert prepared.query.count("<data.ttl>") == 2
 
 
-def test_query_without_dataset_clauses_is_unchanged(tmp_path):
+def test_query_without_dataset_clauses_gets_implicit_base(tmp_path):
     query = """# FROM <ignored.ttl>
     SELECT ("FROM <also-ignored.ttl>" AS ?text)
     WHERE { ?s ?p ?o }"""
@@ -170,7 +170,7 @@ def test_query_without_dataset_clauses_is_unchanged(tmp_path):
 
     assert prepared.setup_error == ""
     assert prepared.sources == ()
-    assert prepared.query == query
+    assert prepared.query == f"BASE <{tmp_path.as_uri()}/>\n{query}"
 
 
 def test_query_without_dataset_does_not_require_algebra_translation(
@@ -188,6 +188,16 @@ def test_query_without_dataset_does_not_require_algebra_translation(
         "sparql_conformance.dataset_tools.translateQuery",
         translation_must_not_run,
     )
+
+    prepared = prepare(tmp_path, query)
+
+    assert prepared.setup_error == ""
+    assert prepared.sources == ()
+    assert prepared.query == f"BASE <{tmp_path.as_uri()}/>\n{query}"
+
+
+def test_explicit_base_without_dataset_is_preserved(tmp_path):
+    query = "BASE <http://example.org/> SELECT * WHERE { ?s ?p ?o }"
 
     prepared = prepare(tmp_path, query)
 

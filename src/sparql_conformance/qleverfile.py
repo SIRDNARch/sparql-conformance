@@ -31,8 +31,12 @@ def qleverfile_args(all_args: dict[str, dict[str, tuple]]) -> None:
     conformance["graph_store"] = arg(
         "--graph-store",
         type=str,
-        required=True,
-        help="Name of the graph store endpoint used for graph store protocol tests.",
+        required=False,
+        default=None,
+        help=(
+            "Override the engine manager's graph store endpoint for graph "
+            "store protocol tests."
+        ),
     )
     conformance["test_suites"] = arg(
         "--test-suites",

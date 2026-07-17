@@ -78,22 +78,22 @@ def test_legacy_turtle_result_sets_are_requested_as_xml(run_results):
     assert next(
         result_format
         for query, result_format in query_formats
-        if query.startswith("SELECT ?o WHERE")
+        if "SELECT ?o WHERE" in query
     ) == "srx"
     assert next(
         result_format
         for query, result_format in query_formats
-        if query.startswith("ASK {")
+        if "ASK {" in query
     ) == "srx"
     assert next(
         result_format
         for query, result_format in query_formats
-        if query.startswith("SELECT ?o WHERE { <http://example.org/s2>")
+        if "SELECT ?o WHERE { <http://example.org/s2>" in query
     ) == "srj"
     assert next(
         result_format
         for query, result_format in query_formats
-        if query.startswith("CONSTRUCT { ?s")
+        if "CONSTRUCT { ?s" in query
     ) == "ttl"
 
 
@@ -135,3 +135,74 @@ def test_result_file_is_valid_v2_json(run_results, tmp_path):
             "datasetSources",
         ):
             assert field in entry
+
+
+def test_relative_graph_data_uses_its_resolved_file_iri(tmp_path, monkeypatch):
+    suite_dir = tmp_path / "suite"
+    suite_dir.mkdir()
+    graph_file = suite_dir / "named.ttl"
+    graph_file.write_text(
+        "<http://example.org/s> <http://example.org/p> "
+        "<http://example.org/o> .\n",
+        encoding="utf-8",
+    )
+    (suite_dir / "query.rq").write_text(
+        "SELECT (<named.ttl> AS ?g) WHERE { GRAPH <named.ttl> { "
+        "<http://example.org/s> <http://example.org/p> "
+        "<http://example.org/o> } }\n",
+        encoding="utf-8",
+    )
+    (suite_dir / "result.ttl").write_text(
+        """@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
+        [] a rs:ResultSet ;
+           rs:resultVariable "g" ;
+           rs:solution [ rs:binding [
+             rs:variable "g" ; rs:value <named.ttl>
+           ] ] .
+        """,
+        encoding="utf-8",
+    )
+    (suite_dir / "manifest.ttl").write_text(
+        """@prefix mf: <http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#> .
+        @prefix qt: <http://www.w3.org/2001/sw/DataAccess/tests/test-query#> .
+        @prefix : <manifest#> .
+        <> a mf:Manifest ; mf:entries ( :graph-iri ) .
+        :graph-iri a mf:QueryEvaluationTest ;
+            mf:name "graph-iri" ;
+            mf:action [ qt:query <query.rq> ; qt:graphData <named.ttl> ] ;
+            mf:result <result.ttl> .
+        """,
+        encoding="utf-8",
+    )
+
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    monkeypatch.chdir(work_dir)
+    config = Config(
+        image=None,
+        system="native",
+        port="7001",
+        graph_store="sparql",
+        testsuite_dir=str(suite_dir),
+        type_alias=[],
+        binaries_directory="",
+        exclude=[],
+        include=None,
+    )
+    tests, test_count = extract_tests(config)
+    graph_iri = graph_file.resolve().as_uri()
+    (graph_group,) = tests["query"].keys()
+    assert (str(graph_file.resolve()), graph_iri) in graph_group
+
+    suite = TestSuite(
+        name="graph-iri",
+        tests=tests,
+        test_count=test_count,
+        config=config,
+        engine_manager=RdflibEngineManager(),
+        results_dir=str(work_dir),
+        report_mode="none",
+    )
+    suite.run()
+    statuses, _ = statuses_by_name(suite)
+    assert statuses["graph-iri"] == Status.PASSED

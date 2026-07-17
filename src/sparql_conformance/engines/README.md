@@ -76,6 +76,10 @@ class MyEngineManager(EngineManager):
         Protocol tests send requests to http://localhost:<port>/<protocol_endpoint>.
         """
         return "sparql"
+
+    def graph_store_endpoint(self) -> str:
+        """The engine's default Graph Store Protocol endpoint path."""
+        return "sparql"
 ```
 
 ## The Config object
@@ -87,7 +91,7 @@ class MyEngineManager(EngineManager):
 | `config.server_address` | `str` | Always `"localhost"` |
 | `config.port` | `str` | Port from `--port` (default `"7001"`) |
 | `config.path_to_binaries` | `str` | Absolute path from `--binaries-directory`; empty string if not set |
-| `config.GRAPHSTORE` | `str` | Graph store endpoint path from `--graph-store` (default `"sparql"`) |
+| `config.GRAPHSTORE` | `str` | Graph store endpoint path from `--graph-store`, or from `graph_store_endpoint()` when no override was given |
 | `config.path_to_test_suite` | `str` | Absolute path to the test suite directory |
 | `config.alias` | `list` | Type alias pairs from `--type-alias` |
 | `config.exclude` | `list[str]` | Test/group names to skip |
@@ -135,6 +139,12 @@ If your engine exposes SPARQL UPDATE on a different path than SELECT, override t
 def protocol_update_endpoint(self) -> str:
     return "sparql/update"  # default falls back to protocol_endpoint()
 ```
+
+### `graph_store_endpoint() -> str`
+
+Returns the engine's default Graph Store Protocol endpoint path. The default
+implementation returns `"sparql"`; override it when the engine uses a different
+route. Users can still replace the manager's value with `--graph-store`.
 
 ### `default_graph_construct_query() -> str`
 

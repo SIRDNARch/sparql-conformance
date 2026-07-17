@@ -62,6 +62,9 @@ class JenaManager(EngineManager):
     def protocol_update_endpoint(self) -> str:
         return f"{DEFAULT_NAME}/update"
 
+    def graph_store_endpoint(self) -> str:
+        return f"{DEFAULT_NAME}/data"
+
     def setup(
         self,
         config: Config,

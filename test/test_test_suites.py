@@ -77,6 +77,10 @@ def test_qleverfile_argument_uses_shared_parser(monkeypatch):
     assert "sparql10_dir" not in all_args["conformance"]
     assert "custom" not in all_args["conformance"]
 
+    _, graph_store_keyword = all_args["conformance"]["graph_store"]
+    assert graph_store_keyword["required"] is False
+    assert graph_store_keyword["default"] is None
+
 
 @pytest.mark.parametrize("qleverfile", sorted(QLEVERFILES.glob("Qleverfile.*")))
 def test_bundled_qleverfile_has_valid_test_suites(qleverfile):
@@ -91,6 +95,7 @@ def test_bundled_qleverfile_has_valid_test_suites(qleverfile):
     }
     assert "SPARQL11_DIR" not in config["conformance"]
     assert "SPARQL10_DIR" not in config["conformance"]
+    assert "GRAPH_STORE" not in config["conformance"]
 
 
 def run_cli(*arguments):

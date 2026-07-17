@@ -22,12 +22,12 @@ class LoggingRdflibManager(RdflibEngineManager):
         return "ENGINE LOG LINE"
 
 
-def make_config():
+def make_config(graph_store="sparql"):
     return Config(
         image=None,
         system="native",
         port="7001",
-        graph_store="sparql",
+        graph_store=graph_store,
         testsuite_dir=FIXTURE_SUITE,
         type_alias=[],
         binaries_directory="",
@@ -48,6 +48,39 @@ def make_suite(engine_manager):
         results_dir=".",
         report_mode="none",
     )
+
+
+class CustomGraphStoreManager(RdflibEngineManager):
+    def graph_store_endpoint(self):
+        return "engine-default-graph-store"
+
+
+def test_engine_manager_supplies_graph_store_default():
+    config = make_config(graph_store=None)
+
+    TestSuite(
+        name="graph-store-default",
+        tests={},
+        test_count=0,
+        config=config,
+        engine_manager=CustomGraphStoreManager(),
+    )
+
+    assert config.GRAPHSTORE == "engine-default-graph-store"
+
+
+def test_explicit_graph_store_override_is_preserved():
+    config = make_config(graph_store="custom-override")
+
+    TestSuite(
+        name="graph-store-override",
+        tests={},
+        test_count=0,
+        config=config,
+        engine_manager=CustomGraphStoreManager(),
+    )
+
+    assert config.GRAPHSTORE == "custom-override"
 
 
 def test_default_get_server_log_reads_run_id_file(tmp_path, monkeypatch):

@@ -99,9 +99,12 @@ def main():
     )
     parser.add_argument(
         "--graph-store",
-        default="sparql",
+        default=None,
         dest="graph_store",
-        help="Graph store endpoint name for graph store protocol tests (default: sparql)",
+        help=(
+            "Override the engine manager's graph store endpoint for graph "
+            "store protocol tests"
+        ),
     )
     parser.add_argument(
         "--test-suites",

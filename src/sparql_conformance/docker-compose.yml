@@ -1,3 +1,5 @@
+# Private, read-only deployment for `sparql_conformance visualize`.
+# Unlike the UI repository's local Compose file, this builds a selectable Git branch.
 services:
   web:
     image: sparql-conformance-web:${SPARQL_CONFORMANCE_UI_BRANCH:-main}
@@ -19,13 +21,13 @@ services:
       API_SURFACE: read
       PORT: 3000
       HOST: 0.0.0.0
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
       DB_PATH: /data/conformance.db
       LOCAL_RESULTS_DIR: /results
       PRIVATE_AUTO_IMPORT: "true"
-      WEBSITE_ORIGIN: http://localhost:${PRIVATE_WEB_PORT:-3000}
     volumes:
       - db_data:/data
-      - ${LOCAL_RESULTS_DIR}:/results:ro
+      - "${LOCAL_RESULTS_DIR}:/results:ro"
     networks:
       default:
         aliases:

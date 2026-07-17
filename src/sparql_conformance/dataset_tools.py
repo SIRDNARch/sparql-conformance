@@ -89,23 +89,31 @@ def _local_path(source_iri: str) -> tuple[str | None, str]:
 
 
 def prepare_query_dataset(query: str, query_path: str) -> PreparedQuery:
-    """Resolve query dataset clauses and return the files to stage."""
-    if not _FROM_KEYWORD.search(query):
-        return PreparedQuery(query=query, sources=())
-
+    """Set the query base and resolve dataset files that need staging."""
     resolved_query_path = Path(query_path).resolve()
     query_uri = resolved_query_path.as_uri()
     try:
         parsed_query = parseQuery(query)
     except Exception as error:
+        if not _FROM_KEYWORD.search(query):
+            # Query evaluation will report the syntax error. Dataset
+            # preparation must not reject engine-specific query syntax.
+            return PreparedQuery(query=query, sources=())
         return PreparedQuery(
             query=query,
             sources=(),
             setup_error=f"Could not parse query dataset clauses: {error}",
         )
 
+    execution_query = query
+    if not _has_explicit_base(parsed_query):
+        query_directory_uri = resolved_query_path.parent.as_uri() + "/"
+        execution_query = (
+            f"BASE {rdflib.URIRef(query_directory_uri).n3()}\n{query}"
+        )
+
     if not _has_dataset_clauses(parsed_query):
-        return PreparedQuery(query=query, sources=())
+        return PreparedQuery(query=execution_query, sources=())
 
     try:
         resolved_iris = _resolve_dataset_clauses(parsed_query, query_uri)
@@ -128,10 +136,4 @@ def prepare_query_dataset(query: str, query_path: str) -> PreparedQuery:
             seen.add(key)
             sources.append(source)
 
-    execution_query = query
-    if not _has_explicit_base(parsed_query):
-        query_directory_uri = resolved_query_path.parent.as_uri() + "/"
-        execution_query = (
-            f"BASE {rdflib.URIRef(query_directory_uri).n3()}\n{query}"
-        )
     return PreparedQuery(query=execution_query, sources=tuple(sources))

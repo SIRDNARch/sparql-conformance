@@ -96,6 +96,15 @@ class EngineManager(ABC):
         """
         return self.protocol_endpoint()
 
+    def graph_store_endpoint(self) -> str:
+        """Return the endpoint used by Graph Store Protocol tests.
+
+        ``--graph-store`` can override this value. Most engines expose their
+        graph store at ``sparql``, so that remains the default for custom
+        managers that do not override this method.
+        """
+        return "sparql"
+
     def default_graph_construct_query(self) -> str:
         """
         Returns a CONSTRUCT query that retrieves all triples from the default graph.

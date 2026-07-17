@@ -47,6 +47,9 @@ class VirtuosoManager(EngineManager):
     def protocol_endpoint(self) -> str:
         return "sparql"
 
+    def graph_store_endpoint(self) -> str:
+        return "sparql"
+
     def setup(
         self,
         config: Config,

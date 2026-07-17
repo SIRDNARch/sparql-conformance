@@ -109,6 +109,9 @@ class GraphdbManager(EngineManager):
     def protocol_update_endpoint(self) -> str:
         return f"repositories/{self._run_id}/statements"
 
+    def graph_store_endpoint(self) -> str:
+        return "repositories/graphdb"
+
     def setup(
         self,
         config: Config,

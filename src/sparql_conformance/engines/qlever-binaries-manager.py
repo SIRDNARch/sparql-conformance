@@ -83,6 +83,9 @@ class QleverBinariesManager(EngineManager):
     def protocol_endpoint(self) -> str:
         return "sparql"
 
+    def graph_store_endpoint(self) -> str:
+        return "http-graph-store"
+
     def default_graph_construct_query(self) -> str:
         return "CONSTRUCT {?s ?p ?o} WHERE { GRAPH ql:default-graph {?s ?p ?o}}"
 

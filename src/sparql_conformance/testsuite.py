@@ -110,6 +110,8 @@ class TestSuite:
         self.failed = 0
         self.passed_failed = 0
         self.engine_manager = engine_manager
+        if self.config.GRAPHSTORE is None:
+            self.config.GRAPHSTORE = self.engine_manager.graph_store_endpoint()
         self.results_dir = results_dir
         self.report_mode = report_mode
 
@@ -143,6 +145,8 @@ class TestSuite:
                     query_result,
                     result_format,
                     test.result_public_id,
+                    self.config.alias,
+                    self.config.number_types,
                 )
             elif result_format == "srx":
                 status, error_type, expected_html, test_html, expected_red, test_red = compare_xml(

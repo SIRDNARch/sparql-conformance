@@ -288,12 +288,19 @@ def parse_node(graph: Graph, node: Any) -> Union[str, Dict[str, Any], None]:
     if node.__class__.__name__ == "Literal":
         return str(node)
 
-    value_dict: Dict[str, Union[str, List[str]]] = {}
+    value_dict: Dict[str, Any] = {}
     for p, o in graph.predicate_objects(node):
         key = local_name(str(p))
         if key == 'request':
             key = 'query'
-        value = uri_to_path(parse_node(graph, o))
+        if key == 'graphData' and isinstance(o, URIRef):
+            source_iri = str(o)
+            value = {
+                'graph': uri_to_path(source_iri),
+                'label': source_iri,
+            }
+        else:
+            value = uri_to_path(parse_node(graph, o))
 
         if key in value_dict:
             if isinstance(value_dict[key], list):

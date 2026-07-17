@@ -76,11 +76,6 @@ class TestCommand(QleverCommand):
                 )
                 return False
 
-        if args.engine == "blazegraph" and args.graph_store == "sparql":
-            args.graph_store = "blazegraph/namespace/kb/sparql"
-        if args.engine == "jena" and args.graph_store == "sparql":
-            args.graph_store = "qlever-sparql-conformance/data"
-
         alias = [tuple(x) for x in args.type_alias] if args.type_alias else []
 
         def make_config(suite_dir):

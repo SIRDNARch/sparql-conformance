@@ -85,7 +85,7 @@ sparql_conformance test
 | `--engine` | from Qleverfile | Engine type: `qlever`, `qlever-binaries`, `blazegraph`, `graphdb`, `jena`, `mdb`, `oxigraph`, `virtuoso` |
 | `--name` | from Qleverfile | Run name; output is written to `<results-dir>/<name>.json.bz2` |
 | `--port` | from Qleverfile | Port the engine server listens on |
-| `--graph-store` | from Qleverfile | Graph store endpoint path for graph store protocol tests |
+| `--graph-store` | engine-specific | Optional override for the engine manager's graph store endpoint |
 | `--test-suites` | from Qleverfile | JSON object mapping suite names to directories, e.g. `'{"sparql11":"./testsuite-files/sparql/sparql11/","my-suite":"/path/to/custom"}'` |
 | `--type-alias` | from Qleverfile | JSON list of XSD type pairs treated as equivalent deviations, e.g. `'[["http://.../integer","http://.../int"]]'` |
 | `--exclude` | — | Comma-separated test/group names to skip |

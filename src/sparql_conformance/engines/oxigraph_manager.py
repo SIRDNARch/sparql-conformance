@@ -59,13 +59,15 @@ class OxigraphManager(EngineManager):
     def protocol_endpoint(self) -> str:
         return "query"
 
+    def graph_store_endpoint(self) -> str:
+        return "store"
+
     def setup(
         self,
         config: Config,
         graph_paths: tuple[tuple[str, str], ...],
     ) -> tuple[bool, bool, str, str]:
         server_success = False
-        config.GRAPHSTORE = "store"
         graph_files, cleanup_paths = self._prepare_graphs(graph_paths)
         index_success, index_log = self._index(config, graph_files)
         self._cleanup_graph_copies(cleanup_paths)

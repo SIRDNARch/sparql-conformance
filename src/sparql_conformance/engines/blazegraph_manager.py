@@ -47,6 +47,9 @@ class BlazegraphManager(EngineManager):
     def protocol_endpoint(self) -> str:
         return "blazegraph/namespace/kb/sparql"
 
+    def graph_store_endpoint(self) -> str:
+        return "blazegraph/namespace/kb/sparql"
+
     def default_graph_construct_query(self) -> str:
         if self._quads_mode:
             return (

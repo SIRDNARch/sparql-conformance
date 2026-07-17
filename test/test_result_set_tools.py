@@ -13,7 +13,7 @@ from sparql_conformance.result_set_tools import (
     is_select_or_ask,
     sparql_xml_to_result_set_ttl,
 )
-from sparql_conformance.test_object import Status
+from sparql_conformance.test_object import ErrorMessage, Status
 
 
 RS = "http://www.w3.org/2001/sw/DataAccess/tests/result-set#"
@@ -33,6 +33,10 @@ def literal_binding(value, name="value", attributes=""):
         f'<binding name="{name}"><literal {attributes}>'
         f"{value}</literal></binding>"
     )
+
+
+def bnode_binding(value, name="value"):
+    return f'<binding name="{name}"><bnode>{value}</bnode></binding>'
 
 
 def ordered_result(values):
@@ -234,12 +238,249 @@ def test_ordered_duplicate_solutions_are_preserved():
     )
 
 
+def test_large_unordered_duplicate_result_is_compared_as_a_multiset():
+    repeated = [
+        ("one", "one"),
+        ("two", "two"),
+        ("three", "three"),
+        ("four", "four"),
+    ]
+    rows = [row for row in repeated for _ in range(9)]
+    rows.extend([
+        ("unique-1", "unique-a"),
+        ("unique-2", "unique-b"),
+        ("unique-3", "unique-c"),
+        ("unique-4", "unique-d"),
+    ])
+    solutions = "\n".join(
+        f"""rs:solution [ rs:binding
+          [ rs:variable "left" ; rs:value "{left}" ],
+          [ rs:variable "right" ; rs:value "{right}" ]
+        ] ;"""
+        for left, right in rows
+    )
+    expected = f"""@prefix rs: <{RS}> .
+    [] a rs:ResultSet ;
+       rs:resultVariable "left", "right" ;
+       {solutions}
+       .
+    """
+    actual = select_xml(
+        [
+            literal_binding(left, "left")
+            + literal_binding(right, "right")
+            for left, right in reversed(rows)
+        ],
+        variables=("right", "left"),
+    )
+
+    assert compare_rdf_result_set(expected, actual, "ttl")[0] == Status.PASSED
+
+    wrong_rows = list(reversed(rows))
+    wrong_rows[0] = ("wrong", wrong_rows[0][1])
+    wrong = select_xml(
+        [
+            literal_binding(left, "left")
+            + literal_binding(right, "right")
+            for left, right in wrong_rows
+        ],
+        variables=("left", "right"),
+    )
+    assert compare_rdf_result_set(expected, wrong, "ttl")[0] == Status.FAILED
+
+
+def test_unordered_result_requires_consistent_bnode_mapping_across_rows():
+    expected = f"""@prefix rs: <{RS}> .
+    [] a rs:ResultSet ;
+       rs:resultVariable "label", "node" ;
+       rs:solution [ rs:binding
+         [ rs:variable "label" ; rs:value "first" ],
+         [ rs:variable "node" ; rs:value _:shared ]
+       ] ;
+       rs:solution [ rs:binding
+         [ rs:variable "label" ; rs:value "second" ],
+         [ rs:variable "node" ; rs:value _:shared ]
+       ] .
+    """
+    correct = select_xml(
+        [
+            literal_binding("second", "label") + bnode_binding("renamed", "node"),
+            literal_binding("first", "label") + bnode_binding("renamed", "node"),
+        ],
+        variables=("node", "label"),
+    )
+    inconsistent = select_xml(
+        [
+            literal_binding("first", "label") + bnode_binding("one", "node"),
+            literal_binding("second", "label") + bnode_binding("two", "node"),
+        ],
+        variables=("label", "node"),
+    )
+    head, _, tail = expected.rpartition("_:shared")
+    distinct_expected = head + "_:other" + tail
+
+    assert compare_rdf_result_set(expected, correct, "ttl")[0] == Status.PASSED
+    assert (
+        compare_rdf_result_set(expected, inconsistent, "ttl")[0]
+        == Status.FAILED
+    )
+    assert (
+        compare_rdf_result_set(distinct_expected, correct, "ttl")[0]
+        == Status.FAILED
+    )
+
+
+def test_ask_boolean_mismatch_fails_even_with_the_same_graph_size():
+    expected = f"""@prefix rs: <{RS}> .
+    @prefix xsd: <{rdflib.XSD}> .
+    [] a rs:ResultSet ; rs:boolean "true"^^xsd:boolean .
+    """
+    actual = f"""<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+      <head/><boolean>false</boolean>
+    </sparql>"""
+
+    assert compare_rdf_result_set(expected, actual, "ttl")[0] == Status.FAILED
+
+
+def test_configured_datatype_alias_is_an_intended_deviation():
+    expected = f"""@prefix rs: <{RS}> .
+    @prefix xsd: <{rdflib.XSD}> .
+    [] a rs:ResultSet ;
+       rs:resultVariable "value" ;
+       rs:solution [ rs:binding [
+         rs:variable "value" ; rs:value "29"^^xsd:integer
+       ] ] .
+    """
+    actual = select_xml([
+        literal_binding(
+            "29",
+            attributes=f'datatype="{rdflib.XSD.int}"',
+        ),
+    ])
+    aliases = [(str(rdflib.XSD.integer), str(rdflib.XSD.int))]
+
+    assert compare_rdf_result_set(expected, actual, "ttl")[0] == Status.FAILED
+    status, error, *_ = compare_rdf_result_set(
+        expected,
+        actual,
+        "ttl",
+        alias=aliases,
+        number_types=(str(rdflib.XSD.integer), str(rdflib.XSD.int)),
+    )
+    assert status == Status.INTENDED
+    assert error == ErrorMessage.INTENDED_MSG
+
+
+def test_plain_and_xsd_string_alias_is_an_intended_deviation():
+    expected = f"""@prefix rs: <{RS}> .
+    @prefix xsd: <{rdflib.XSD}> .
+    [] a rs:ResultSet ;
+       rs:resultVariable "value" ;
+       rs:solution [ rs:binding [
+         rs:variable "value" ; rs:value "text"^^xsd:string
+       ] ] .
+    """
+    actual = select_xml([literal_binding("text")])
+
+    status, error, *_ = compare_rdf_result_set(
+        expected,
+        actual,
+        "ttl",
+        alias=[(str(rdflib.XSD.string), None)],
+    )
+    assert status == Status.INTENDED
+    assert error == ErrorMessage.INTENDED_MSG
+
+
+def test_alias_comparison_keeps_order_and_global_bnode_mapping():
+    expected = f"""@prefix rs: <{RS}> .
+    @prefix xsd: <{rdflib.XSD}> .
+    [] a rs:ResultSet ;
+       rs:resultVariable "node", "value" ;
+       rs:solution [ rs:index 1 ; rs:binding
+         [ rs:variable "node" ; rs:value _:shared ],
+         [ rs:variable "value" ; rs:value "1.0"^^xsd:float ]
+       ] ;
+       rs:solution [ rs:index 2 ; rs:binding
+         [ rs:variable "node" ; rs:value _:shared ],
+         [ rs:variable "value" ; rs:value "2.0"^^xsd:float ]
+       ] .
+    """
+    correct = select_xml(
+        [
+            bnode_binding("renamed", "node")
+            + literal_binding(
+                "1",
+                attributes=f'datatype="{rdflib.XSD.double}"',
+            ),
+            bnode_binding("renamed", "node")
+            + literal_binding(
+                "2",
+                attributes=f'datatype="{rdflib.XSD.double}"',
+            ),
+        ],
+        variables=("value", "node"),
+    )
+    reversed_rows = select_xml(
+        [
+            bnode_binding("renamed", "node")
+            + literal_binding(
+                "2",
+                attributes=f'datatype="{rdflib.XSD.double}"',
+            ),
+            bnode_binding("renamed", "node")
+            + literal_binding(
+                "1",
+                attributes=f'datatype="{rdflib.XSD.double}"',
+            ),
+        ],
+        variables=("node", "value"),
+    )
+    aliases = [(str(rdflib.XSD.float), str(rdflib.XSD.double))]
+    number_types = (str(rdflib.XSD.float), str(rdflib.XSD.double))
+
+    assert compare_rdf_result_set(
+        expected,
+        correct,
+        "ttl",
+        alias=aliases,
+        number_types=number_types,
+    )[0] == Status.INTENDED
+    assert compare_rdf_result_set(
+        expected,
+        reversed_rows,
+        "ttl",
+        alias=aliases,
+        number_types=number_types,
+    )[0] == Status.FAILED
+
+
+def test_aliases_do_not_hide_ask_boolean_mismatches():
+    expected = f"""@prefix rs: <{RS}> .
+    @prefix xsd: <{rdflib.XSD}> .
+    [] a rs:ResultSet ; rs:boolean "true"^^xsd:boolean .
+    """
+    actual = f"""<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+      <head/><boolean>false</boolean>
+    </sparql>"""
+
+    assert compare_rdf_result_set(
+        expected,
+        actual,
+        "ttl",
+        alias=[(str(rdflib.XSD.integer), str(rdflib.XSD.int))],
+        number_types=(str(rdflib.XSD.integer), str(rdflib.XSD.int)),
+    )[0] == Status.FAILED
+
+
 @pytest.mark.parametrize(
     "indices",
     [
         ("rs:index 1 ;", ""),
         ('rs:index "first" ;', 'rs:index "second" ;'),
         ("rs:index 1, 2 ;", "rs:index 2 ;"),
+        ("rs:index 1 ;", "rs:index 1 ;"),
+        ("rs:index 1 ;", "rs:index 3 ;"),
     ],
 )
 def test_malformed_or_partial_order_indices_are_rejected(indices):
@@ -250,7 +491,7 @@ def test_malformed_or_partial_order_indices_are_rejected(indices):
         literal_binding("Alice"),
         literal_binding("Bob"),
     ])
-    with pytest.raises(ValueError, match="rs:index|integer"):
+    with pytest.raises(ValueError, match="rs:index|integer|indices"):
         compare_rdf_result_set(expected, actual, "ttl")
 
 

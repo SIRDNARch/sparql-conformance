@@ -26,6 +26,9 @@ class QLeverManager(EngineManager):
     def protocol_endpoint(self) -> str:
         return "sparql"
 
+    def graph_store_endpoint(self) -> str:
+        return "http-graph-store"
+
     def cleanup(self, config: Config):
         self._stop_server(config)
         with mute_log():
